@@ -4,6 +4,14 @@
     "titleWelcome": "Bem-vindo de volta",
     "descAccept": "Faça login e vamos te levar até o convite.",
     "descWelcome": "Entre na sua conta",
+    "headline1": "Gerencie suas",
+    "headline2": "conversas",
+    "headline2Invite": "convites",
+    "headline3": "com facilidade.",
+    "feature1": "⚡ Atendimento em tempo real",
+    "feature2": "💬 Histórico de conversas",
+    "feature3": "📊 Relatórios e métricas",
+    "signInCta": "Acessar o CRM →",
     "emailLabel": "E-mail",
     "emailPlaceholder": "voce@exemplo.com",
     "passwordLabel": "Senha",
@@ -1330,13 +1338,11 @@
       "deleteLocallyAria": "Excluir modelo localmente",
       "deleteMetaLocallyTitle": "Excluir da Meta e localmente",
       "deleteLocallyTitle": "Excluir localmente",
-
       "dialogEditTitle": "Editar modelo de mensagem",
       "dialogNewTitle": "Novo modelo de mensagem",
       "dialogEditDesc": "Salve suas alterações para reenviar à Meta. O status voltará para PENDENTE durante a revisão.",
       "dialogNewDesc": "Crie um modelo e envie-o para aprovação da Meta. Depois de aprovado, você pode usá-lo em transmissões e na caixa de entrada.",
       "authWarning": "Modelos de AUTENTICAÇÃO têm um corpo fixo + formato de botão OTP que precisa de um criador diferente. Crie-os no Meta WhatsApp Manager por enquanto e use <bold>Sincronizar da Meta</bold> para trazê-los.",
-
       "templateName": "Nome do modelo",
       "namePlaceholder": "ex.: confirmacao_pedido",
       "nameFixed": "O nome fica fixo assim que um modelo existe na Meta — crie um novo modelo para alterá-lo.",
@@ -1345,7 +1351,6 @@
       "language": "Idioma",
       "langFixed": "O idioma fica fixo assim que um modelo existe na Meta.",
       "langHint": "Deve corresponder exatamente ao código na Meta — <code>en_US</code> e <code>en</code> são distintos.",
-
       "header": "Cabeçalho",
       "headerNone": "Nenhum",
       "headerText": "Texto",
@@ -1355,7 +1360,6 @@
       "headerTextPlaceholder": "Texto do cabeçalho (máx. 60 caracteres, {{1}} opcional)",
       "headerSampleAria": "Valor de exemplo para a variável do cabeçalho",
       "headerSamplePlaceholder": "Valor de exemplo para {{1}} (obrigatório para revisão da Meta)",
-
       "uploadImage": "Enviar imagem",
       "uploadHint": "JPEG ou PNG, ≤5 MB",
       "mediaUrlPlaceholder": "https://… (ou cole um link público de {format})",
@@ -1363,17 +1367,14 @@
       "mediaHint": "Deve ser um link HTTPS acessível publicamente. A Meta busca esse link uma vez durante a revisão, então ele precisa ficar ativo por ~24 horas.",
       "videoHint": " Recomendado: MP4 / 3GPP, ≤16 MB, ≤60 segundos.",
       "documentHint": " Recomendado: PDF, ≤100 MB.",
-
       "bodyText": "Texto do corpo",
       "bodyPlaceholder": "Olá {{1}}, seu pedido {{2}} está confirmado.",
       "bodyHint": "Use {{1}}, {{2}} para variáveis (devem ser contínuas a partir de {{1}}).",
       "sampleValues": "Valores de exemplo (a Meta usa isso para revisar seu modelo)",
       "sampleAria": "Valor de exemplo para a variável do corpo {var}",
       "samplePlaceholder": "Exemplo para {var}",
-
       "footer": "Rodapé (opcional)",
       "footerPlaceholder": "Texto de rodapé opcional (máx. 60 caracteres)",
-
       "buttons": "Botões (opcional)",
       "addButton": "Adicionar botão",
       "buttonsLimit": "Até {max} botões. Botões QUICK_REPLY devem vir antes dos botões de URL / telefone / copiar código.",
@@ -1386,19 +1387,16 @@
       "urlSamplePlaceholder": "Valor de exemplo para {{1}} (obrigatório quando a URL tem uma variável)",
       "phonePlaceholder": "+5511987654321",
       "codePlaceholder": "Código de exemplo (ex.: VERAO20)",
-
       "cancel": "Cancelar",
       "saving": "Salvando…",
       "submitting": "Enviando…",
       "saveResubmit": "Salvar e reenviar",
       "submitApproval": "Enviar para aprovação",
-
       "deleteDialogTitle": "Excluir modelo?",
       "deleteMetaDesc": "\"{name}\" será excluído da Meta e do wacrm. Transmissões ativas que usam este modelo começarão a falhar no próximo envio. Isso não pode ser desfeito.",
       "deleteLocalDesc": "\"{name}\" será excluído do wacrm. Ele nunca foi enviado à Meta, então nenhuma limpeza remota é necessária.",
       "deleting": "Excluindo…",
       "delete": "Excluir",
-
       "toastLoadFailed": "Falha ao carregar modelos",
       "toastSubmitFailed": "Falha ao enviar",
       "toastSubmitEditSuccess": "Edição enviada — a Meta normalmente revisa em até 24 horas.",
@@ -1538,7 +1536,6 @@
       "profileSaved": "Perfil salvo",
       "emailChangeFailed": "Falha na alteração de e-mail: {message}",
       "profileSavedEmailCheck": "Perfil salvo — verifique seu e-mail para confirmar a alteração de endereço",
-
       "passwordTitle": "Senha",
       "passwordDesc": "Use pelo menos {min} caracteres. Você continuará conectado(a) neste dispositivo após alterá-la.",
       "currentPassword": "Senha atual",
@@ -1552,7 +1549,6 @@
       "currentPasswordIncorrect": "A senha atual está incorreta",
       "passwordUpdateFailed": "Falha ao atualizar a senha: {message}",
       "passwordUpdated": "Senha atualizada",
-
       "sessionsTitle": "Sessões ativas",
       "sessionsDesc": "Saia de todos os dispositivos em que você está conectado(a) — incluindo este. Útil se você perdeu um notebook ou compartilhou sua senha.",
       "signOutAll": "Sair de todos os dispositivos",
@@ -1692,6 +1688,48 @@
       "reindex": "Reindexar",
       "reindexTooltip": "Reprocessar embeddings de todos os documentos (ex.: após adicionar uma chave de embeddings)",
       "loading": "Carregando…"
+    },
+    "quickReplies": {
+      "title": "Respostas rápidas",
+      "description": "Trechos reutilizáveis — texto simples ou uma mensagem interativa salva — que os agentes podem inserir a partir do composer do inbox.",
+      "newQuickReply": "Nova resposta rápida",
+      "editQuickReply": "Editar resposta rápida",
+      "emptyState": "Nenhuma resposta rápida ainda. Crie uma para reutilizar nas conversas.",
+      "nameLabel": "Nome",
+      "namePlaceholder": "ex.: Horário de atendimento",
+      "textTab": "Texto",
+      "interactiveTab": "Interativa",
+      "contentPlaceholder": "O texto da mensagem a inserir",
+      "cancel": "Cancelar",
+      "save": "Salvar",
+      "deleteConfirm": "Excluir esta resposta rápida?",
+      "nameRequired": "Dê um nome para a resposta rápida.",
+      "saveError": "Não foi possível salvar a resposta rápida.",
+      "deleteError": "Não foi possível excluir a resposta rápida.",
+      "createdToast": "Resposta rápida criada.",
+      "updatedToast": "Resposta rápida atualizada."
+    }
+  },
+  "Notifications": {
+    "page": {
+      "title": "Notificações",
+      "subtitle": "Conversas que outros membros da equipe atribuem a você aparecem aqui.",
+      "markAllAsRead": "Marcar tudo como lido",
+      "unreadLabel": "Não lida",
+      "emptyTitle": "Nenhuma notificação ainda",
+      "emptyDesc": "Você verá um alerta aqui quando alguém atribuir uma conversa a você.",
+      "retry": "Tentar novamente",
+      "markReadError": "Falha ao marcar notificação como lida",
+      "markAllReadError": "Falha ao marcar tudo como lido"
+    }
+  },
+  "Agents": {
+    "page": {
+      "title": "Agentes de IA",
+      "subtitle": "Seu agente de IA com chave própria — configure e teste no playground antes de responder aos clientes no inbox.",
+      "tabPlayground": "Playground",
+      "tabSetup": "Configuração",
+      "tabUsage": "Uso"
     }
   }
 }

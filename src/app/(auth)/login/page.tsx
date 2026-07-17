@@ -5,23 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { MessageSquare, UsersRound } from "lucide-react";
 
-// `useSearchParams` opts the component out of static prerendering
-// unless it sits under a Suspense boundary. We split the form into
-// a child component so the outer page can prerender the chrome
-// (background, card frame) while the form hydrates with the query
-// string on the client.
 export default function LoginPage() {
   return (
     <Suspense fallback={null}>
@@ -32,9 +16,6 @@ export default function LoginPage() {
 
 function LoginPageInner() {
   const searchParams = useSearchParams();
-  // Forwarded from `/join/<token>` when the visitor already has an
-  // account. After a successful sign-in we send them to the join
-  // page to accept rather than to /dashboard.
   const inviteToken = searchParams.get("invite");
   const t = useTranslations("LoginPage");
 
@@ -50,10 +31,7 @@ function LoginPageInner() {
     setError(null);
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
       setError(error.message);
@@ -69,95 +47,185 @@ function LoginPageInner() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-md border-border bg-card">
-        <CardHeader className="items-center text-center">
-          <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-            {inviteToken ? (
-              <UsersRound className="h-6 w-6 text-primary" />
-            ) : (
-              <MessageSquare className="h-6 w-6 text-primary" />
-            )}
+    <div
+      className="relative flex min-h-screen w-full overflow-hidden"
+      style={{
+        background:
+          "linear-gradient(140deg, rgb(10, 25, 50) 14.3%, rgb(26, 51, 92) 50%, rgb(30, 62, 111) 85.7%)",
+      }}
+    >
+      {/* Ellipses decorativas */}
+      <div
+        className="pointer-events-none absolute -left-[120px] -top-[80px] size-[560px] rounded-full"
+        style={{
+          background:
+            "radial-gradient(circle, rgba(59,123,247,0.35) 0%, transparent 70%)",
+        }}
+      />
+      <div
+        className="pointer-events-none absolute -bottom-[100px] -right-[60px] size-[400px] rounded-full"
+        style={{
+          background:
+            "radial-gradient(circle, rgba(5,192,229,0.2) 0%, transparent 70%)",
+        }}
+      />
+
+      {/* ── Painel esquerdo: branding (desktop) ── */}
+      <div className="hidden lg:flex lg:w-[640px] flex-shrink-0 flex-col justify-between px-[72px] py-[64px]">
+        {/* Logo */}
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 items-center justify-center rounded-xl border border-[rgba(96,153,250,0.4)] bg-[rgba(59,123,247,0.2)] px-3">
+            <span className="text-base font-extrabold text-white">Clientizza</span>
           </div>
-          <CardTitle className="text-xl text-foreground">
-            {inviteToken ? t('titleAccept') : t('titleWelcome')}
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            {inviteToken
-              ? t('descAccept')
-              : t('descWelcome')}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+        </div>
+
+        {/* Conteúdo central */}
+        <div className="flex flex-col">
+
+          {/* Headline */}
+          <div className="mb-6">
+            <p className="text-[56px] font-extrabold leading-tight text-white">
+              {t("headline1")}
+            </p>
+            <p className="text-[56px] font-extrabold leading-tight text-[#6099fa]">
+              {inviteToken ? t("headline2Invite") : t("headline2")}
+            </p>
+            <p className="text-[56px] font-extrabold leading-tight text-white">
+              {t("headline3")}
+            </p>
+          </div>
+
+          {/* Descrição */}
+          <p className="mb-10 text-[16px] leading-[28px] text-[#a5abb8]">
+            Acompanhe seus contatos, atendimentos
+            <br />e conversas em um só lugar.
+          </p>
+
+          {/* Feature badges */}
+          <div className="flex flex-col gap-3">
+            {[t("feature1"), t("feature2"), t("feature3")].map((feat) => (
+              <div
+                key={feat}
+                className="inline-flex w-fit items-center rounded-full border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.06)] px-[17px] py-[9px]"
+              >
+                <span className="text-[13px] font-medium text-white">{feat}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div />
+      </div>
+
+      {/* Divisor vertical */}
+      <div className="hidden lg:block w-px self-stretch bg-[rgba(255,255,255,0.06)]" />
+
+      {/* ── Painel direito: formulário ── */}
+      <div className="flex flex-1 items-center justify-center px-6 py-12">
+        <div
+          className="w-full max-w-[460px] overflow-hidden rounded-[28px] border border-[rgba(255,255,255,0.15)] px-[31px] py-[47px] shadow-[0px_24px_64px_-8px_rgba(10,25,50,0.4)]"
+          style={{ background: "rgba(255,255,255,0.06)", backdropFilter: "blur(1px)" }}
+        >
+          {/* Ícone */}
+          <div
+            className="mx-auto mb-5 flex h-16 items-center justify-center rounded-[20px] px-4"
+            style={{ background: "linear-gradient(90deg, #3b7bf7, #1a335c)" }}
+          >
+            <span className="text-[20px] font-extrabold text-white">Clientizza</span>
+          </div>
+
+          {/* Título */}
+          <h2 className="mb-2 text-center text-[22px] font-bold text-white">
+            {inviteToken ? t("titleAccept") : t("titleWelcome")}
+          </h2>
+          <p className="mb-6 text-center text-[14px] text-[#b2bfd9]">
+            {inviteToken ? t("descAccept") : t("descWelcome")}
+          </p>
+
+          {/* Formulário */}
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
             {error && (
-              <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+              <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
                 {error}
               </div>
             )}
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="email" className="text-muted-foreground">
-                {t('emailLabel')}
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder={t('emailPlaceholder')}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
-              />
+            {/* Email */}
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="email"
+                className="text-[12px] font-medium text-[#a6b2cc]"
+              >
+                {t("emailLabel")}
+              </label>
+              <div className="flex h-[48px] items-center rounded-[14px] border-[1.5px] border-[rgba(255,255,255,0.15)] bg-[rgba(255,255,255,0.08)] px-[14px]">
+                <input
+                  id="email"
+                  type="email"
+                  placeholder={t("emailPlaceholder")}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full bg-transparent text-[14px] text-white placeholder:text-[#66738c] focus:outline-none"
+                />
+              </div>
             </div>
 
-            <div className="flex flex-col gap-2">
+            {/* Senha */}
+            <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password" className="text-muted-foreground">
-                  {t('passwordLabel')}
-                </Label>
+                <label
+                  htmlFor="password"
+                  className="text-[12px] font-medium text-[#a6b2cc]"
+                >
+                  {t("passwordLabel")}
+                </label>
                 <Link
                   href="/forgot-password"
-                  className="text-sm text-primary hover:text-primary/80"
+                  className="text-[12px] text-[#6099fa] hover:text-[#3b7bf7]"
                 >
-                  {t('forgotPassword')}
+                  {t("forgotPassword")}
                 </Link>
               </div>
-              <Input
-                id="password"
-                type="password"
-                placeholder={t('passwordPlaceholder')}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
-              />
+              <div className="flex h-[48px] items-center rounded-[14px] border-[1.5px] border-[rgba(255,255,255,0.15)] bg-[rgba(255,255,255,0.08)] px-[14px]">
+                <input
+                  id="password"
+                  type="password"
+                  placeholder={t("passwordPlaceholder")}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full bg-transparent text-[14px] text-white placeholder:text-[#66738c] focus:outline-none"
+                />
+              </div>
             </div>
 
-            <Button
+            {/* Botão */}
+            <button
               type="submit"
               disabled={loading}
-              className="mt-2 h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              className="mt-2 h-[52px] w-full rounded-[16px] text-[15px] font-semibold text-white shadow-[0px_8px_24px_-4px_rgba(37,99,235,0.5)] transition-opacity hover:opacity-90 disabled:opacity-50"
+              style={{ background: "linear-gradient(90deg, #3b7bf7, #1a335c)" }}
             >
-              {loading ? t('signingIn') : t('signIn')}
-            </Button>
+              {loading ? t("signingIn") : t("signInCta")}
+            </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            {t('noAccount')}{" "}
+          <p className="mt-6 text-center text-[13px] text-[#99a6bf]">
+            {t("noAccount")}{" "}
             <Link
               href={
                 inviteToken
                   ? `/signup?invite=${encodeURIComponent(inviteToken)}`
                   : "/signup"
               }
-              className="text-primary hover:text-primary/80"
+              className="text-[#6099fa] hover:text-[#3b7bf7]"
             >
-              {t('createAccount')}
+              {t("createAccount")}
             </Link>
           </p>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
