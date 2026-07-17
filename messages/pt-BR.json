@@ -772,7 +772,8 @@
         "preparing": "Preparando...",
         "progressDesc": "Processando {current} de {total} destinatários...",
         "toastFailedPreview": "Falha ao carregar dados de pré-visualização"
-      }
+      },
+      "enterValuePlaceholder": "Digite um valor..."
     }
   },
   "Automations": {
@@ -980,7 +981,8 @@
         "matchContains": "Contém",
         "matchExact": "Exato",
         "closeConversationHint": "Define o status da conversa como \"fechada\". Nenhuma configuração necessária."
-      }
+      },
+      "cronPlaceholder": "Expressão cron ou HH:mm"
     },
     "templates": {
       "welcome_message": {
@@ -1142,7 +1144,8 @@
         "filenamePlaceholder": "fatura.pdf",
         "advanceAfterSending": "Após o envio, avançar para",
         "pickNextNode": "Escolha o próximo nó…",
-        "none": "— Nenhum —"
+        "none": "— Nenhum —",
+        "pickTagPlaceholder": "Escolha uma tag…"
       },
       "categories": {
         "messaging": "Mensagens",
@@ -1793,5 +1796,8 @@
       "callsCount": "{count} {count, plural, =1 {chamada} other {chamadas}}",
       "truncatedNotice": "Mostrando uma janela parcial — o uso é alto o suficiente para que apenas os registros mais recentes sejam resumidos aqui."
     }
+  },
+  "Common": {
+    "loading": "Carregando..."
   }
 }

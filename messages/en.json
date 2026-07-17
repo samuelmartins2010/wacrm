@@ -772,7 +772,8 @@
         "preparing": "Preparing...",
         "progressDesc": "Processing {current} of {total} recipients...",
         "toastFailedPreview": "Failed to load preview data"
-      }
+      },
+      "enterValuePlaceholder": "Enter value..."
     }
   },
   "Automations": {
@@ -980,7 +981,8 @@
         "matchContains": "Contains",
         "matchExact": "Exact",
         "closeConversationHint": "Sets the conversation status to \"closed\". No configuration needed."
-      }
+      },
+      "cronPlaceholder": "Cron expression or HH:mm"
     },
     "templates": {
       "welcome_message": {
@@ -1142,7 +1144,8 @@
         "filenamePlaceholder": "invoice.pdf",
         "advanceAfterSending": "After sending, advance to",
         "pickNextNode": "Pick a next node…",
-        "none": "— None —"
+        "none": "— None —",
+        "pickTagPlaceholder": "Pick a tag…"
       },
       "categories": {
         "messaging": "Messaging",
@@ -1793,5 +1796,8 @@
       "callsCount": "{count} {count, plural, =1 {call} other {calls}}",
       "truncatedNotice": "Showing a partial window — usage is high enough that only the most recent records are summarized here."
     }
+  },
+  "Common": {
+    "loading": "Loading..."
   }
 }
