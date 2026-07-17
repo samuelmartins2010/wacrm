@@ -981,6 +981,24 @@
         "matchExact": "Exato",
         "closeConversationHint": "Define o status da conversa como \"fechada\". Nenhuma configuração necessária."
       }
+    },
+    "templates": {
+      "welcome_message": {
+        "name": "Mensagem de boas-vindas",
+        "description": "Resposta automática de saudação para contatos na primeira mensagem."
+      },
+      "out_of_office": {
+        "name": "Fora do expediente",
+        "description": "Resposta automática fora do horário de atendimento para ninguém ficar esperando."
+      },
+      "lead_qualifier": {
+        "name": "Qualificador de leads",
+        "description": "Faz perguntas de qualificação para filtrar leads recebidos."
+      },
+      "follow_up_reminder": {
+        "name": "Lembrete de follow-up",
+        "description": "Envia um lembrete se o contato não responder em 24 horas."
+      }
     }
   },
   "Flows": {
@@ -1203,6 +1221,20 @@
       "modeRemove": "Remover",
       "tagPicked": "{mode} etiqueta {tag}…",
       "tagNone": "{mode} etiqueta (nenhuma escolhida)"
+    },
+    "templates": {
+      "welcome_menu": {
+        "name": "Menu de boas-vindas",
+        "description": "Recebe clientes que digitam uma palavra-chave e os direciona ao agente certo, conforme sejam novos ou existentes."
+      },
+      "faq_bot": {
+        "name": "Bot de perguntas frequentes",
+        "description": "Responde perguntas comuns automaticamente. O cliente escolhe um tópico numa lista; o bot responde e encerra."
+      },
+      "lead_capture": {
+        "name": "Captura de leads",
+        "description": "Recebe contatos novos, coleta nome + e-mail + empresa e encaminha para vendas com as respostas na nota."
+      }
     }
   },
   "Settings": {
@@ -1730,6 +1762,36 @@
       "tabPlayground": "Playground",
       "tabSetup": "Configuração",
       "tabUsage": "Uso"
+    },
+    "playground": {
+      "title": "Playground",
+      "subtitle": "— teste respostas como se você fosse um cliente",
+      "reset": "Redefinir",
+      "emptyTitle": "Envie uma mensagem para ver como seu agente responderia.",
+      "emptySubtitle": "Usa sua base de conhecimento e se comporta exatamente como o bot de resposta automática — incluindo o handoff.",
+      "goToSetup": "Ainda não configurou? Ir para Configuração",
+      "handoffNotice": "Faria o handoff para um humano aqui",
+      "thinking": "Pensando…",
+      "inputPlaceholder": "Digite uma mensagem de cliente…",
+      "notConfiguredError": "Nenhum agente configurado ainda — finalize a Configuração primeiro.",
+      "replyError": "Não foi possível obter uma resposta.",
+      "connectionError": "Não foi possível conectar ao agente."
+    },
+    "usage": {
+      "title": "Uso de tokens",
+      "description": "Tokens gastos na sua chave de provedor por rascunhos e pelo bot de resposta automática. Apenas contagens — nenhum conteúdo de mensagem é armazenado aqui.",
+      "windowLabel": "Últimos {days} dias",
+      "loadError": "Falha ao carregar o uso",
+      "emptyTitle": "Nenhum uso de IA nos últimos {days} dias ainda.",
+      "emptySubtitle": "Isso vai se preenchendo conforme o assistente faz rascunhos e respostas automáticas.",
+      "statTotalTokens": "Total de tokens",
+      "statLlmCalls": "Chamadas de LLM",
+      "statAutoReply": "Resposta automática",
+      "statDrafts": "Rascunhos",
+      "tokensPerDay": "Tokens por dia",
+      "byModel": "Por modelo",
+      "callsCount": "{count} {count, plural, =1 {chamada} other {chamadas}}",
+      "truncatedNotice": "Mostrando uma janela parcial — o uso é alto o suficiente para que apenas os registros mais recentes sejam resumidos aqui."
     }
   }
 }
