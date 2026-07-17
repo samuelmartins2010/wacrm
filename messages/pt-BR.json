@@ -1193,7 +1193,22 @@
           "label": "Fim",
           "blurb": "Encerra o fluxo"
         }
-      }
+      },
+      "backToFlows": "Voltar para Fluxos",
+      "flowNamePlaceholder": "Nome do fluxo",
+      "unsavedChangesHint": "Alterações não salvas — clique em Salvar para persistir",
+      "edited": "Editado",
+      "runs": "Execuções",
+      "delete": "Excluir",
+      "pause": "Pausar",
+      "activate": "Ativar",
+      "activateDisabledHint": "Corrija os problemas abaixo antes de ativar",
+      "save": "Salvar",
+      "descriptionPlaceholder": "Adicione uma breve descrição (interna — clientes não veem isso)",
+      "statusDraft": "Rascunho",
+      "statusActive": "Ativo",
+      "statusArchived": "Arquivado",
+      "flowDescriptionAria": "Descrição do fluxo"
     },
     "validation": {
       "noIssues": "Nenhum problema. Pronto para ativar.",
@@ -1799,5 +1814,25 @@
   },
   "Common": {
     "loading": "Carregando..."
+  },
+  "InteractiveBuilder": {
+    "kindButtons": "Botões de resposta",
+    "kindList": "Lista",
+    "bodyLabel": "Corpo",
+    "bodyPlaceholder": "O que o cliente lê acima das opções",
+    "headerLabel": "Cabeçalho (opcional)",
+    "footerLabel": "Rodapé (opcional)",
+    "showReplyIds": "Mostrar IDs de resposta (avançado)",
+    "preview": "Prévia",
+    "buttonsCountLabel": "Botões ({count}/{max})",
+    "buttonLabelPlaceholder": "Texto do botão",
+    "addButton": "Adicionar botão",
+    "rowsCountLabel": "Linhas ({count}/{max})",
+    "sectionTitlePlaceholder": "Título da seção (opcional)",
+    "rowTitlePlaceholder": "Título da linha",
+    "descriptionPlaceholder": "Descrição (opcional)",
+    "addRow": "Adicionar linha",
+    "addSection": "Adicionar seção",
+    "listButtonLabel": "Texto do botão da lista"
   }
 }
