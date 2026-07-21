@@ -69,8 +69,11 @@ export async function middleware(request: NextRequest) {
     return withRefreshedCookies(NextResponse.redirect(url))
   }
 
-  // Protected pages - redirect to login if not authenticated
-  const protectedPaths = ['/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts', '/automations', '/settings']
+  // Protected pages - redirect to login if not authenticated.
+  const protectedPaths = [
+    '/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts',
+    '/automations', '/settings', '/agents', '/flows', '/superadmin',
+  ]
   if (!user && protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
@@ -83,6 +86,37 @@ export async function middleware(request: NextRequest) {
     return withRefreshedCookies(
       NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     )
+  }
+
+  // Account suspension check — only for authenticated users on CRM pages.
+  // Skip /suspended and /onboarding (infinite loop guard).
+  // Skip /superadmin — super admin is never suspended.
+  const crmPages = [
+    '/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts',
+    '/automations', '/settings', '/agents', '/flows',
+  ]
+  const isCrmPage = crmPages.some(p => request.nextUrl.pathname.startsWith(p))
+
+  if (user && isCrmPage) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('account_id')
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    if (profile?.account_id) {
+      const { data: account } = await supabase
+        .from('accounts')
+        .select('status')
+        .eq('id', profile.account_id)
+        .maybeSingle()
+
+      if (account?.status === 'suspended') {
+        const url = request.nextUrl.clone()
+        url.pathname = '/suspended'
+        return withRefreshedCookies(NextResponse.redirect(url))
+      }
+    }
   }
 
   return supabaseResponse

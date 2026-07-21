@@ -2,18 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 // --- Scenario knobs the mock reads -----------------------------------------
-// `mockUser`         — what getUser() resolves to (a refreshed session ⇒ user,
-//                      or null for the logged-out path).
-// `refreshedCookies` — cookies Supabase writes via setAll() during getUser(),
-//                      i.e. the freshly *rotated* auth token. The whole point
-//                      of the test is that these must survive onto whatever
-//                      response the middleware returns — including redirects.
+// `mockUser`          — what getUser() resolves to (a refreshed session ⇒ user,
+//                       or null for the logged-out path).
+// `refreshedCookies`  — cookies Supabase writes via setAll() during getUser().
+// `mockAccountStatus` — value returned by the suspension check DB queries.
+//                       Defaults to 'active' (no suspension redirect).
 let mockUser: { id: string } | null = null;
 let refreshedCookies: Array<{
   name: string;
   value: string;
   options: Record<string, unknown>;
 }> = [];
+let mockAccountStatus: string = "active";
 
 vi.mock("@supabase/ssr", () => ({
   createServerClient: (
@@ -32,6 +32,20 @@ vi.mock("@supabase/ssr", () => ({
         return { data: { user: mockUser } };
       },
     },
+    // Fluent builder stub for the suspension check in middleware.
+    // Supports: .from(table).select(...).eq(...).maybeSingle()
+    from: (table: string) => {
+      const builder: Record<string, unknown> = {};
+      builder.select = () => builder;
+      builder.eq = () => builder;
+      builder.maybeSingle = async () => {
+        if (table === "profiles") return { data: { account_id: "acc-test-1" } };
+        if (table === "accounts")
+          return { data: { status: mockAccountStatus } };
+        return { data: null };
+      };
+      return builder;
+    },
   }),
 }));
 
@@ -43,6 +57,7 @@ beforeEach(() => {
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
   mockUser = null;
   refreshedCookies = [];
+  mockAccountStatus = "active";
 });
 
 afterEach(() => vi.clearAllMocks());

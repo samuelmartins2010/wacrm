@@ -9,6 +9,26 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.9.0] — 2026-07-21
+
+Adds multi-tenant SaaS support: one installation now serves multiple
+client accounts, each isolated by the existing RLS policies.
+
+> **Migration required:** apply `supabase/migrations/036_saas_subscriptions.sql`
+> (adds `status`, `plan`, `renewal_date`, `notes`, `suspended_at` to `accounts`).
+
+### Added
+
+- **Super Admin Panel** (`/superadmin`). Gated to `SUPER_ADMIN_EMAIL`.
+  Create client accounts (sends Supabase invite e-mail), set plan and
+  renewal date, suspend or reactivate accounts.
+- **Account suspension.** Middleware checks `account.status` on every
+  CRM page. Suspended accounts see `/suspended` with your support
+  contact info (`SUPPORT_PHONE`, `SUPPORT_EMAIL`).
+- **Client onboarding wizard.** New accounts land on `/onboarding` on
+  first login. A 2-step wizard collects the business segment and
+  WhatsApp Business credentials, then redirects to the dashboard.
+
 ## [0.8.0] — 2026-07-08
 
 Polishes the AI auto-reply bot: it's now **visible and controllable from
