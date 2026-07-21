@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
-import { createClient } from "@/lib/supabase/client";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
@@ -15,7 +14,7 @@ import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
 
 function DashboardShellInner({ children }: { children: React.ReactNode }) {
   const t = useTranslations("Common");
-  const { user, accountId, loading } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
 
   // Sidebar drawer state — only used on mobile. On lg+ the sidebar is
@@ -23,36 +22,13 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
 
-  // Once we know the authenticated user and account, check if WhatsApp
-  // has been configured. New accounts that haven't gone through onboarding
-  // yet get redirected to /onboarding.
-  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
-
   useEffect(() => {
     if (!loading && !user) {
       router.push("/login");
     }
   }, [user, loading, router]);
 
-  useEffect(() => {
-    if (loading || !user || !accountId) return;
-
-    const supabase = createClient();
-    supabase
-      .from("whatsapp_config")
-      .select("phone_number_id")
-      .eq("account_id", accountId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!data?.phone_number_id) {
-          router.push("/onboarding");
-        } else {
-          setCheckingOnboarding(false);
-        }
-      });
-  }, [loading, user, accountId, router]);
-
-  if (loading || checkingOnboarding) {
+  if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
