@@ -39,6 +39,7 @@ import {
   Search,
   Plus,
   Upload,
+  Download,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -57,6 +58,13 @@ import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager
 import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
 import { useTranslations } from 'next-intl';
+import { buildContactsCsv, downloadCsv } from '@/lib/contacts/export-contacts-csv';
+
+// Export pages through the same filtered query in batches this size —
+// large enough to keep round-trips low, small enough to stay well under
+// PostgREST's default row cap so a big account's contact list can't be
+// silently truncated.
+const EXPORT_BATCH_SIZE = 1000;
 
 const PAGE_SIZE = 25;
 
@@ -89,6 +97,7 @@ export default function ContactsPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Bulk selection (page-scoped — only the loaded rows are selectable)
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -208,6 +217,104 @@ export default function ContactsPage() {
     setContacts(enriched);
     setLoading(false);
   }, [supabase, page, search, selectedTagIds, tagsMap, t]);
+
+  // Exports every contact matching the current search + tag filter — not
+  // just the 25 rows loaded on-screen. Deliberately separate from
+  // fetchContacts: that function is paginated for display and swaps its
+  // query shape based on the filter state, so bolting "fetch everything"
+  // onto it would make an already-branchy function harder to follow.
+  const handleExport = useCallback(async () => {
+    setExporting(true);
+    const term = search.trim();
+
+    try {
+      const contactRows: Contact[] = [];
+
+      if (selectedTagIds.length > 0) {
+        // Same RPC fetchContacts uses for the tag-filtered case, but
+        // paged through in full instead of a single windowed page.
+        let offset = 0;
+        for (;;) {
+          const { data, error } = await supabase.rpc('filter_contacts_by_tags', {
+            p_tag_ids: selectedTagIds,
+            p_search: term || null,
+            p_limit: EXPORT_BATCH_SIZE,
+            p_offset: offset,
+          });
+          if (error) throw error;
+          const rows = (data ?? []) as { contact: Contact }[];
+          contactRows.push(...rows.map((r) => r.contact));
+          if (rows.length < EXPORT_BATCH_SIZE) break;
+          offset += EXPORT_BATCH_SIZE;
+        }
+      } else {
+        let from = 0;
+        for (;;) {
+          let query = supabase
+            .from('contacts')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .range(from, from + EXPORT_BATCH_SIZE - 1);
+
+          if (term) {
+            const like = `%${term}%`;
+            query = query.or(
+              `name.ilike.${like},phone.ilike.${like},email.ilike.${like}`
+            );
+          }
+
+          const { data, error } = await query;
+          if (error) throw error;
+          const rows = data ?? [];
+          contactRows.push(...rows);
+          if (rows.length < EXPORT_BATCH_SIZE) break;
+          from += EXPORT_BATCH_SIZE;
+        }
+      }
+
+      if (contactRows.length === 0) {
+        toast.error(t('toastExportEmpty'));
+        return;
+      }
+
+      // Resolve tag names in chunks — `.in()` with an unbounded id list
+      // can hit URL length limits on large exports.
+      const tagsByContact: Record<string, string[]> = {};
+      const idChunkSize = 200;
+      for (let i = 0; i < contactRows.length; i += idChunkSize) {
+        const idsChunk = contactRows.slice(i, i + idChunkSize).map((c) => c.id);
+        const { data: contactTags, error } = await supabase
+          .from('contact_tags')
+          .select('contact_id, tag_id')
+          .in('contact_id', idsChunk);
+        if (error) throw error;
+        contactTags?.forEach((ct) => {
+          if (!tagsByContact[ct.contact_id]) tagsByContact[ct.contact_id] = [];
+          tagsByContact[ct.contact_id].push(ct.tag_id);
+        });
+      }
+
+      const csv = buildContactsCsv(
+        contactRows.map((c) => ({
+          phone: c.phone,
+          name: c.name,
+          email: c.email,
+          company: c.company,
+          tagNames: (tagsByContact[c.id] ?? [])
+            .map((tid) => tagsMap[tid]?.name)
+            .filter((name): name is string => !!name),
+        }))
+      );
+
+      const date = new Date().toISOString().slice(0, 10);
+      downloadCsv(csv, `contacts-${date}.csv`);
+      toast.success(t('toastExported', { count: contactRows.length }));
+    } catch {
+      toast.error(t('toastExportFailed'));
+    } finally {
+      setExporting(false);
+    }
+  }, [supabase, search, selectedTagIds, tagsMap, t]);
 
   // Load-once-on-mount-ish data fetches. Each setter inside runs
   // inside an async promise completion (Supabase await), not
@@ -369,6 +476,21 @@ export default function ContactsPage() {
           >
             <Upload className="size-4" />
             {t('importBtn')}
+          </GatedButton>
+          <GatedButton
+            variant="outline"
+            canAct={canEdit}
+            gateReason="export contacts"
+            disabled={exporting || totalCount === 0}
+            onClick={handleExport}
+            className="border-border text-muted-foreground hover:bg-muted"
+          >
+            {exporting ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Download className="size-4" />
+            )}
+            {t('exportBtn')}
           </GatedButton>
           <GatedButton
             canAct={canEdit}

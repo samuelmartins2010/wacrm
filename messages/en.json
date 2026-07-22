@@ -289,6 +289,7 @@
       "subtitleZero": "Manage your contact list.",
       "customFieldsBtn": "Custom fields",
       "importBtn": "Import",
+      "exportBtn": "Export",
       "addContactBtn": "Add Contact",
       "searchPlaceholder": "Search by name, phone, or email...",
       "filterByTags": "Filter by tags",
@@ -324,7 +325,11 @@
       "toastFailedDelete": "Failed to delete contact",
       "toastDeleted": "Contact deleted",
       "toastBulkFailedDelete": "Failed to delete contacts",
-      "toastBulkDeleted": "{count} contacts deleted"
+      "toastBulkDeleted": "{count} contacts deleted",
+      "toastExported": "{count} contact exported",
+      "toastExported_plural": "{count} contacts exported",
+      "toastExportEmpty": "No contacts to export",
+      "toastExportFailed": "Failed to export contacts"
     },
     "form": {
       "addTitle": "Add Contact",
