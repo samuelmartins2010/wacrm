@@ -20,7 +20,10 @@
     "signingIn": "Entrando...",
     "signIn": "Entrar",
     "noAccount": "Não tem uma conta?",
-    "createAccount": "Criar conta"
+    "createAccount": "Criar conta",
+    "subheadline": "Acompanhe seus contatos, atendimentos e conversas em um só lugar.",
+    "orContinueWith": "ou continue com",
+    "signInWithGoogle": "Entrar com Google"
   },
   "Sidebar": {
     "title": "Modelo de CRM para WhatsApp",

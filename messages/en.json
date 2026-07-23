@@ -20,7 +20,10 @@
     "signingIn": "Signing in...",
     "signIn": "Sign in",
     "noAccount": "Don't have an account?",
-    "createAccount": "Create account"
+    "createAccount": "Create account",
+    "subheadline": "Track your contacts, conversations, and follow-ups in one place.",
+    "orContinueWith": "or continue with",
+    "signInWithGoogle": "Sign in with Google"
   },
   "Sidebar": {
     "title": "CRM Template for WhatsApp",
