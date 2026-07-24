@@ -4,7 +4,16 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import { createClient } from "@/lib/supabase/client";
+
+// O Figma usa Plus Jakarta Sans só nos títulos e no botão principal —
+// o resto do app usa Inter (carregada globalmente em layout.tsx), então
+// carregamos essa fonte aqui, escopada só a essa página.
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["700", "800"],
+});
 
 // `useSearchParams` opts the component out of static prerendering
 // unless wrapped in Suspense — same pattern as /signup.
@@ -49,6 +58,7 @@ function LoginPageInner() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -112,8 +122,28 @@ function LoginPageInner() {
             "linear-gradient(155deg, #064e3b 8%, #065f46 46%, #047857 92%)",
         }}
       >
-        <div className="pointer-events-none absolute -left-10 -top-10 size-[240px] rounded-full bg-white/5" />
-        <div className="pointer-events-none absolute -bottom-16 -right-16 size-[320px] rounded-full bg-[#25d366]/10" />
+        {/* Bolhas de chat decorativas — mesma composição do Figma */}
+        <div className="pointer-events-none absolute left-[54px] top-[98px] h-[52px] w-[160px] rounded-tl-[18px] rounded-tr-[18px] rounded-br-[18px] rounded-bl-[4px] bg-white/[0.07]" />
+        <div className="pointer-events-none absolute left-[190px] top-[171px] h-[40px] w-[120px] rounded-tl-[18px] rounded-tr-[18px] rounded-bl-[18px] rounded-br-[4px] bg-[#25d366]/[0.13]" />
+        <div className="pointer-events-none absolute left-[34px] top-[506px] h-[44px] w-[200px] rounded-tl-[18px] rounded-tr-[18px] rounded-br-[18px] rounded-bl-[4px] bg-white/[0.05]" />
+        <div className="pointer-events-none absolute left-[136px] top-[588px] h-[36px] w-[140px] rounded-tl-[18px] rounded-tr-[18px] rounded-bl-[18px] rounded-br-[4px] bg-[#25d366]/10" />
+
+        <div
+          className="pointer-events-none absolute -left-10 -top-10 size-[240px] rounded-full"
+          style={{
+            background:
+              "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.06), rgba(0,0,0,0) 70%)",
+          }}
+        />
+        <div
+          className="pointer-events-none absolute size-[320px] rounded-full"
+          style={{
+            left: "419px",
+            top: "556px",
+            background:
+              "radial-gradient(circle at 30% 30%, rgba(16,185,129,0.18), rgba(8,93,65,0.09) 35%, rgba(0,0,0,0) 70%)",
+          }}
+        />
 
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -123,7 +153,7 @@ function LoginPageInner() {
         />
 
         <div className="relative flex flex-col">
-          <p className="text-[42px] font-extrabold leading-tight text-white">
+          <p className={`${jakarta.className} text-[42px] font-extrabold leading-tight text-white`}>
             {t("headline1")}{" "}
             <span className="text-[#25d366]">
               {inviteToken ? t("headline2Invite") : t("headline2")}
@@ -149,7 +179,7 @@ function LoginPageInner() {
             className="mx-auto mb-4 h-10 w-10 lg:hidden"
           />
 
-          <h1 className="text-center text-[26px] font-extrabold tracking-tight text-[#064e3b]">
+          <h1 className={`${jakarta.className} text-center text-[26px] font-extrabold tracking-tight text-[#064e3b]`}>
             {inviteToken ? t("titleAccept") : t("titleWelcome")}
           </h1>
           <p className="mt-2 text-center text-[14.5px] text-[#6b7280]">
@@ -221,10 +251,20 @@ function LoginPageInner() {
               </div>
             </div>
 
+            <label className="flex items-center gap-[9px]">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="size-4 rounded-[2px] border border-[#767676] text-[#047857] focus:ring-[#047857]/30"
+              />
+              <span className="text-[13.5px] text-[#6b7280]">{t("rememberMe")}</span>
+            </label>
+
             <button
               type="submit"
               disabled={loading}
-              className="mt-1 h-[50px] w-full rounded-xl text-[15px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              className={`${jakarta.className} mt-1 h-[50px] w-full rounded-xl text-[15px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50`}
               style={{ background: "linear-gradient(173deg, #065f46 0%, #047857 100%)" }}
             >
               {loading ? t("signingIn") : t("signInCta")}
@@ -260,6 +300,35 @@ function LoginPageInner() {
               {t("createAccount")}
             </Link>
           </p>
+
+          <div className="mt-4 flex items-center justify-center gap-4 text-xs text-[#6b7280]">
+            <a
+              href="https://clientizza.com/termos"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-[#374151]"
+            >
+              {t("termsOfUse")}
+            </a>
+            <span className="text-[#666]">•</span>
+            <a
+              href="https://clientizza.com/privacidade"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-[#374151]"
+            >
+              {t("privacyPolicy")}
+            </a>
+            <span className="text-[#666]">•</span>
+            <a
+              href="https://clientizza.com/suporte"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-[#374151]"
+            >
+              {t("support")}
+            </a>
+          </div>
         </div>
       </div>
     </div>

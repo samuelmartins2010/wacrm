@@ -25,7 +25,11 @@
     "orContinueWith": "ou continue com",
     "signInWithGoogle": "Entrar com Google",
     "showPassword": "Mostrar senha",
-    "hidePassword": "Ocultar senha"
+    "hidePassword": "Ocultar senha",
+    "rememberMe": "Lembrar meu acesso",
+    "termsOfUse": "Termos de uso",
+    "privacyPolicy": "Política de privacidade",
+    "support": "Suporte"
   },
   "Sidebar": {
     "title": "Modelo de CRM para WhatsApp",

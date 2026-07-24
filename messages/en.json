@@ -25,7 +25,11 @@
     "orContinueWith": "or continue with",
     "signInWithGoogle": "Sign in with Google",
     "showPassword": "Show password",
-    "hidePassword": "Hide password"
+    "hidePassword": "Hide password",
+    "rememberMe": "Remember me",
+    "termsOfUse": "Terms of use",
+    "privacyPolicy": "Privacy policy",
+    "support": "Support"
   },
   "Sidebar": {
     "title": "CRM Template for WhatsApp",
