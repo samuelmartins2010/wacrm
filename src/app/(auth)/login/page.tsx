@@ -119,7 +119,7 @@ function LoginPageInner() {
         <img
           src="/brand/clientizza-logo-full.png"
           alt="Clientizza"
-          className="relative h-9 w-auto"
+          className="relative h-9 w-auto self-start"
         />
 
         <div className="relative flex flex-col">
