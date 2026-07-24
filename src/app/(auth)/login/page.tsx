@@ -5,16 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 
 // `useSearchParams` opts the component out of static prerendering
 // unless wrapped in Suspense — same pattern as /signup.
@@ -58,6 +48,7 @@ function LoginPageInner() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -84,10 +75,6 @@ function LoginPageInner() {
     }
   };
 
-  // OAuth has no "check your email" pause step — the browser comes back
-  // authenticated straight away, so the invite token has to travel via
-  // `redirectTo`'s `next` query param instead of `emailRedirectTo` (the
-  // mechanism the password-based signup flow uses).
   const handleGoogleLogin = async () => {
     setError(null);
     setGoogleLoading(true);
@@ -107,9 +94,14 @@ function LoginPageInner() {
       setError(error.message);
       setGoogleLoading(false);
     }
-    // On success the browser navigates away to Google — nothing left to do here.
   };
 
+  // NOTE: every color below is a literal value, deliberately NOT the
+  // app's --primary/--background tokens. This screen is a pre-auth
+  // brand surface pinned to the Figma spec — it must look identical
+  // no matter what dark/light mode or accent theme the visitor's
+  // browser has stored, since they haven't logged in yet to have a
+  // preference at all. Same approach the old (blue) design used.
   return (
     <div className="flex min-h-screen w-full flex-col lg:flex-row">
       {/* ── Painel esquerdo: branding (oculto no mobile) ── */}
@@ -146,109 +138,129 @@ function LoginPageInner() {
         <div className="relative" />
       </div>
 
-      {/* ── Painel direito: formulário ── */}
-      <div className="flex flex-1 items-center justify-center bg-background px-4 py-12">
-        <Card className="w-full max-w-[440px] border-border bg-card">
-          <CardHeader className="items-center text-center">
-            {/* Marca compacta — visível só quando o painel esquerdo some (mobile) */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/brand/clientizza-icon.png"
-              alt=""
-              className="mb-2 h-10 w-10 lg:hidden"
-            />
-            <CardTitle className="text-2xl text-foreground">
-              {inviteToken ? t("titleAccept") : t("titleWelcome")}
-            </CardTitle>
-            <CardDescription>
-              {inviteToken ? t("descAccept") : t("descWelcome")}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="flex flex-col gap-4">
-              {error && (
-                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {error}
-                </div>
-              )}
+      {/* ── Painel direito: formulário (sempre claro, ver nota acima) ── */}
+      <div className="flex flex-1 items-center justify-center bg-[#f0f4f2] px-4 py-12">
+        <div className="w-full max-w-[440px] rounded-2xl border border-[#e5e7eb] bg-white p-10 shadow-[0px_4px_10px_rgba(0,0,0,0.1)]">
+          {/* Marca compacta — visível só quando o painel esquerdo some (mobile) */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/clientizza-icon.png"
+            alt=""
+            className="mx-auto mb-4 h-10 w-10 lg:hidden"
+          />
 
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="email">{t("emailLabel")}</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder={t("emailPlaceholder")}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
-                />
+          <h1 className="text-center text-[26px] font-extrabold tracking-tight text-[#064e3b]">
+            {inviteToken ? t("titleAccept") : t("titleWelcome")}
+          </h1>
+          <p className="mt-2 text-center text-[14.5px] text-[#6b7280]">
+            {inviteToken ? t("descAccept") : t("descWelcome")}
+          </p>
+
+          <form onSubmit={handleLogin} className="mt-8 flex flex-col gap-[18px]">
+            {error && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
               </div>
+            )}
 
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">{t("passwordLabel")}</Label>
-                  <Link
-                    href="/forgot-password"
-                    className="text-xs text-primary hover:text-primary/80"
-                  >
-                    {t("forgotPassword")}
-                  </Link>
-                </div>
-                <Input
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="email" className="text-[13px] font-semibold text-[#374151]">
+                {t("emailLabel")}
+              </label>
+              <input
+                id="email"
+                type="email"
+                placeholder={t("emailPlaceholder")}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="h-[48px] rounded-xl border border-[#d1d5db] bg-[#f8faf9] px-4 text-[14.5px] text-[#111827] placeholder:text-[#111827]/50 outline-none focus:border-[#047857] focus:ring-2 focus:ring-[#047857]/20"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <label htmlFor="password" className="text-[13px] font-semibold text-[#374151]">
+                  {t("passwordLabel")}
+                </label>
+                <Link
+                  href="/forgot-password"
+                  className="text-[12.5px] font-medium text-[#065f46] hover:text-[#047857]"
+                >
+                  {t("forgotPassword")}
+                </Link>
+              </div>
+              <div className="relative">
+                <input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder={t("passwordPlaceholder")}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
+                  className="h-[48px] w-full rounded-xl border border-[#d1d5db] bg-[#f8faf9] pl-4 pr-11 text-[14.5px] text-[#111827] placeholder:text-[#111827]/50 outline-none focus:border-[#047857] focus:ring-2 focus:ring-[#047857]/20"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? t("hidePassword") : t("showPassword")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7280] hover:text-[#374151]"
+                >
+                  {showPassword ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.8 21.8 0 0 1 5.06-6.94M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.8 21.8 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" strokeLinecap="round" strokeLinejoin="round" />
+                      <line x1="1" y1="1" x2="23" y2="23" strokeLinecap="round" />
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" strokeLinecap="round" strokeLinejoin="round" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
               </div>
-
-              <Button
-                type="submit"
-                disabled={loading}
-                className="mt-1 h-11 w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                {loading ? t("signingIn") : t("signInCta")}
-              </Button>
-            </form>
-
-            <div className="my-5 flex items-center gap-3">
-              <div className="h-px flex-1 bg-border" />
-              <span className="text-xs text-muted-foreground">
-                {t("orContinueWith")}
-              </span>
-              <div className="h-px flex-1 bg-border" />
             </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              disabled={googleLoading}
-              onClick={handleGoogleLogin}
-              className="h-11 w-full gap-2 border-border text-foreground hover:bg-muted"
+            <button
+              type="submit"
+              disabled={loading}
+              className="mt-1 h-[50px] w-full rounded-xl text-[15px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              style={{ background: "linear-gradient(173deg, #065f46 0%, #047857 100%)" }}
             >
-              <GoogleIcon />
-              {googleLoading ? t("signingIn") : t("signInWithGoogle")}
-            </Button>
+              {loading ? t("signingIn") : t("signInCta")}
+            </button>
+          </form>
 
-            <p className="mt-6 text-center text-sm text-muted-foreground">
-              {t("noAccount")}{" "}
-              <Link
-                href={
-                  inviteToken
-                    ? `/signup?invite=${encodeURIComponent(inviteToken)}`
-                    : "/signup"
-                }
-                className="text-primary hover:text-primary/80"
-              >
-                {t("createAccount")}
-              </Link>
-            </p>
-          </CardContent>
-        </Card>
+          <div className="my-[26px] flex items-center gap-3">
+            <div className="h-px flex-1 bg-[#e5e7eb]" />
+            <span className="text-xs text-[#9ca3af]">{t("orContinueWith")}</span>
+            <div className="h-px flex-1 bg-[#e5e7eb]" />
+          </div>
+
+          <button
+            type="button"
+            disabled={googleLoading}
+            onClick={handleGoogleLogin}
+            className="flex h-[48px] w-full items-center justify-center gap-2.5 rounded-xl border border-[#e5e7eb] bg-white text-[14px] font-medium text-[#374151] hover:bg-[#f9fafb] disabled:opacity-50"
+          >
+            <GoogleIcon />
+            {googleLoading ? t("signingIn") : t("signInWithGoogle")}
+          </button>
+
+          <p className="mt-6 text-center text-[13.5px] text-[#6b7280]">
+            {t("noAccount")}{" "}
+            <Link
+              href={
+                inviteToken
+                  ? `/signup?invite=${encodeURIComponent(inviteToken)}`
+                  : "/signup"
+              }
+              className="font-medium text-[#065f46] hover:text-[#047857]"
+            >
+              {t("createAccount")}
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

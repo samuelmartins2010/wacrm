@@ -23,7 +23,9 @@
     "createAccount": "Criar conta",
     "subheadline": "Acompanhe seus contatos, atendimentos e conversas em um só lugar.",
     "orContinueWith": "ou continue com",
-    "signInWithGoogle": "Entrar com Google"
+    "signInWithGoogle": "Entrar com Google",
+    "showPassword": "Mostrar senha",
+    "hidePassword": "Ocultar senha"
   },
   "Sidebar": {
     "title": "Modelo de CRM para WhatsApp",

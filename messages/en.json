@@ -23,7 +23,9 @@
     "createAccount": "Create account",
     "subheadline": "Track your contacts, conversations, and follow-ups in one place.",
     "orContinueWith": "or continue with",
-    "signInWithGoogle": "Sign in with Google"
+    "signInWithGoogle": "Sign in with Google",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
   },
   "Sidebar": {
     "title": "CRM Template for WhatsApp",
