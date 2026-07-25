@@ -287,20 +287,6 @@ function LoginPageInner() {
             {googleLoading ? t("signingIn") : t("signInWithGoogle")}
           </button>
 
-          <p className="mt-6 text-center text-[13.5px] text-[#6b7280]">
-            {t("noAccount")}{" "}
-            <Link
-              href={
-                inviteToken
-                  ? `/signup?invite=${encodeURIComponent(inviteToken)}`
-                  : "/signup"
-              }
-              className="font-medium text-[#065f46] hover:text-[#047857]"
-            >
-              {t("createAccount")}
-            </Link>
-          </p>
-
           <div className="mt-4 flex items-center justify-center gap-4 text-xs text-[#6b7280]">
             <a
               href="https://clientizza.com/termos"

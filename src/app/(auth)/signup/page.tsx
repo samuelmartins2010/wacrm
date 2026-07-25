@@ -1,8 +1,8 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -30,12 +30,31 @@ export default function SignupPage() {
 function SignupPageInner() {
   const t = useTranslations("SignupPage");
   const searchParams = useSearchParams();
+  const router = useRouter();
   // When the user lands here from `/join/<token>` we carry the
   // invite token in the query so it survives the signup → email
   // verification → redirect round-trip. `emailRedirectTo` below
   // points back at /join/<token> so the user lands on the redeem
   // step after verifying instead of being dropped on /dashboard.
   const inviteToken = searchParams.get("invite");
+
+  // Account creation is now admin-controlled: only invited users
+  // (a valid `?invite=` token) may reach the signup form. Anyone
+  // hitting /signup directly gets bounced to /login.
+  //
+  // NOTE: this is a UI-level gate only. `supabase.auth.signUp` is a
+  // public endpoint under the anon key — a sufficiently technical
+  // visitor could still call it directly, bypassing this page
+  // entirely. Closing that fully requires either validating the
+  // invite token server-side (an API route using the service-role
+  // key instead of a client-side signUp call) or disabling public
+  // signups in Supabase and creating invited users via
+  // admin.createUser. Flagging this as a follow-up, not fixed here.
+  useEffect(() => {
+    if (!inviteToken) {
+      router.replace("/login");
+    }
+  }, [inviteToken, router]);
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -45,6 +64,10 @@ function SignupPageInner() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const supabase = createClient();
+
+  if (!inviteToken) {
+    return null;
+  }
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();

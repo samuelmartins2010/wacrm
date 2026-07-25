@@ -256,22 +256,6 @@ export default function JoinPage() {
               >
                 {t('tryAgain')}
               </Button>
-              <Link href="/signup">
-                <Button
-                  variant="outline"
-                  className="w-full border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  {t('createAccountInstead')}
-                </Button>
-              </Link>
-            </>
-          ) : (
-            <>
-              <Link href="/signup">
-                <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-                  {t('createAccountInstead')}
-                </Button>
-              </Link>
               <Link href="/login">
                 <Button
                   variant="outline"
@@ -281,6 +265,12 @@ export default function JoinPage() {
                 </Button>
               </Link>
             </>
+          ) : (
+            <Link href="/login">
+              <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+                {t('signIn')}
+              </Button>
+            </Link>
           )}
         </CardContent>
       </Card>
