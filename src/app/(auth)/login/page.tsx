@@ -288,32 +288,17 @@ function LoginPageInner() {
           </button>
 
           <div className="mt-4 flex items-center justify-center gap-4 text-xs text-[#6b7280]">
-            <a
-              href="https://clientizza.com/termos"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-[#374151]"
-            >
+            <Link href="/termos" className="hover:text-[#374151]">
               {t("termsOfUse")}
-            </a>
+            </Link>
             <span className="text-[#666]">•</span>
-            <a
-              href="https://clientizza.com/privacidade"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-[#374151]"
-            >
+            <Link href="/privacidade" className="hover:text-[#374151]">
               {t("privacyPolicy")}
-            </a>
+            </Link>
             <span className="text-[#666]">•</span>
-            <a
-              href="https://clientizza.com/suporte"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-[#374151]"
-            >
+            <Link href="/suporte" className="hover:text-[#374151]">
               {t("support")}
-            </a>
+            </Link>
           </div>
         </div>
       </div>
