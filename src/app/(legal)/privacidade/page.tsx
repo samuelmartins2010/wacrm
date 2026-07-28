@@ -13,15 +13,7 @@ export default function PrivacidadePage() {
           Última atualização: {new Date().toLocaleDateString("pt-BR")}
         </p>
       </div>
-
-      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
-        <strong>Rascunho para revisão.</strong> Cobre os pontos exigidos pela
-        LGPD (Lei nº 13.709/2018) de forma direta, mas recomendamos revisão
-        por um advogado antes de publicar — em especial a distinção entre
-        controlador e operador, que impacta obrigações reais, não é só
-        redação.
-      </div>
-
+      
       <Section title="1. Quem trata seus dados">
         <p>
           Esta política é mantida por Samuel Anderson de Amorim Martins,
