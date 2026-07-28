@@ -11,15 +11,7 @@ export default function TermosPage() {
           Última atualização: {new Date().toLocaleDateString("pt-BR")}
         </p>
       </div>
-
-      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
-        <strong>Rascunho para revisão.</strong> Este texto foi escrito como
-        ponto de partida e cobre os pontos essenciais, mas não substitui a
-        revisão de um advogado antes de publicar — principalmente as cláusulas
-        de responsabilidade, cancelamento e as obrigações de LGPD, que têm
-        implicação jurídica direta para o negócio.
-      </div>
-
+           
       <Section title="1. Quem somos">
         <p>
           A plataforma Clientizza (&quot;Clientizza&quot;, &quot;nós&quot;) é
@@ -181,3 +173,5 @@ function Section({
     </section>
   );
 }
+
+
