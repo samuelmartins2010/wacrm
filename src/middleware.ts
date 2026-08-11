@@ -107,13 +107,29 @@ export async function middleware(request: NextRequest) {
     if (profile?.account_id) {
       const { data: account } = await supabase
         .from('accounts')
-        .select('status')
+        .select('status, renewal_date')
         .eq('id', profile.account_id)
         .maybeSingle()
 
       if (account?.status === 'suspended') {
         const url = request.nextUrl.clone()
         url.pathname = '/suspended'
+        return withRefreshedCookies(NextResponse.redirect(url))
+      }
+
+      // Trial expired: same idea as suspension above, but with its
+      // own landing page since the message/CTA differ (upgrade vs.
+      // "contact us about a billing issue"). `renewal_date` is a
+      // DATE column — comparing it against today's date (not a full
+      // timestamp) means access cuts off at the start of the day
+      // after it expires, not mid-day on the expiry date itself.
+      if (
+        account?.status === 'trial' &&
+        account.renewal_date &&
+        account.renewal_date < new Date().toISOString().slice(0, 10)
+      ) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/trial-expired'
         return withRefreshedCookies(NextResponse.redirect(url))
       }
     }
