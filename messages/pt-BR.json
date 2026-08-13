@@ -1921,5 +1921,21 @@
     "signingOut": "Saindo…",
     "createAccountJoin": "Criar conta e entrar",
     "alreadyHaveAccount": "Já tenho uma conta"
+  },
+  "WelcomeDialog": {
+    "title": "Bem-vindo ao Clientizza!",
+    "subtitle": "Tudo que você precisa pra gerenciar conversas do WhatsApp em um só lugar.",
+    "feature1": "Centralize todas as conversas em uma caixa de entrada",
+    "feature2": "Organize contatos e funis de vendas",
+    "feature3": "Automatize respostas e follow-ups",
+    "trialNotice": "Você tem {days, plural, one {# dia} other {# dias}} de teste grátis pra experimentar tudo.",
+    "trialNoticeGeneric": "Você está no período de teste grátis.",
+    "cta": "Vamos lá"
+  },
+  "TrialBanner": {
+    "daysLeft": "Faltam {days} dias no seu teste grátis.",
+    "oneDayLeft": "Último dia do seu teste grátis.",
+    "lastDay": "Seu teste grátis termina hoje.",
+    "contactSupport": "Falar com o suporte"
   }
 }

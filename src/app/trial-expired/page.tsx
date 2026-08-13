@@ -20,7 +20,7 @@ export default function TrialExpiredPage() {
           a gente para continuar usando o Clientizza.
         </p>
 
-        
+        <a
           href={`mailto:${email}`}
           className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >

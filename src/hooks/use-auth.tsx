@@ -43,6 +43,13 @@ interface AccountSummary {
   /** Default deal currency (ISO-4217). NOT NULL DEFAULT 'USD' in the
    *  DB (migration 021); narrowed to DEFAULT_CURRENCY when absent. */
   default_currency: string;
+  /** 'trial' | 'active' | 'suspended' — added in migration 036. Used
+   *  by the trial countdown banner; middleware enforces the actual
+   *  access cutoff independently, this is display-only. */
+  status: string | null;
+  /** Date the trial (or subscription period) ends. Null for accounts
+   *  that predate migration 036/037 or were never put on a trial. */
+  renewal_date: string | null;
 }
 
 interface AuthContextValue {
@@ -169,9 +176,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (data.account_id) {
           const { data: account, error: accountErr } = await supabase
             .from("accounts")
-            // default_currency added in migration 021; narrowed to the
-            // USD fallback below for older schemas where it reads null.
-            .select("id, name, default_currency")
+            // default_currency added in migration 021; status/renewal_date
+            // added in migration 036, narrowed with fallbacks below for
+            // older schemas that predate it.
+            .select("id, name, default_currency, status, renewal_date")
             .eq("id", data.account_id)
             .maybeSingle();
           if (accountErr) {
@@ -186,6 +194,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               id: account.id,
               name: account.name,
               default_currency: account.default_currency ?? DEFAULT_CURRENCY,
+              status: account.status ?? null,
+              renewal_date: account.renewal_date ?? null,
             };
           }
         }

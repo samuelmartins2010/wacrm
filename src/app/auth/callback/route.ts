@@ -31,9 +31,28 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
+      // Detect a brand-new signup (not just any login) to show the
+      // welcome dialog exactly once. Supabase doesn't expose an
+      // explicit "just created" flag, but on someone's very first
+      // sign-in ever, `created_at` and `last_sign_in_at` are the same
+      // instant; on every later login `last_sign_in_at` has moved on.
+      // A few seconds of slack covers clock/serialization jitter.
+      const user = data.user;
+      const isNewSignup =
+        !!user?.created_at &&
+        !!user?.last_sign_in_at &&
+        Math.abs(
+          new Date(user.last_sign_in_at).getTime() -
+            new Date(user.created_at).getTime(),
+        ) < 5000;
+
+      const redirectUrl = new URL(`${origin}${next}`);
+      if (isNewSignup) {
+        redirectUrl.searchParams.set("welcome", "1");
+      }
+      return NextResponse.redirect(redirectUrl.toString());
     }
   }
 
