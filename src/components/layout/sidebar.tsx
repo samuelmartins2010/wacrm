@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { useTheme } from "@/hooks/use-theme";
 import { useTotalUnread } from "@/hooks/use-total-unread";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import {
@@ -117,6 +118,13 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const t = useTranslations("Sidebar");
   const pathname = usePathname();
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
+  // Mirrors the login page's wordmark — but that PNG's text is baked
+  // in white for the login screen's fixed dark-green panel. The
+  // dashboard sidebar isn't fixed to one background (light/dark mode
+  // toggle), so we swap in a dark-text variant for light mode rather
+  // than reusing the white-on-transparent file as-is (invisible on a
+  // white sidebar).
+  const { mode } = useTheme();
   const totalUnread = useTotalUnread();
   const unreadNotifications = useUnreadNotifications();
   // Only surface the account-name strip when it actually carries
@@ -190,13 +198,14 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <Link href="/dashboard" className="flex items-center gap-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/brand/clientizza-icon.png"
-              alt=""
-              className="h-8 w-8 object-contain"
+              src={
+                mode === "dark"
+                  ? "/brand/clientizza-logo-full.png"
+                  : "/brand/clientizza-logo-full-dark.png"
+              }
+              alt={t("title")}
+              className="h-6 w-auto object-contain"
             />
-            <span className="text-sm font-semibold text-foreground">
-              {t("title")}
-            </span>
           </Link>
           <button
             type="button"
