@@ -271,6 +271,10 @@ function LoginPageInner() {
             </button>
           </form>
 
+          {/* Login com Google temporariamente oculto — pedido do Samuel
+              em 2026-08-13. A lógica (handleGoogleLogin, GoogleIcon,
+              /auth/callback) continua toda no lugar; é só reativar o
+              JSX abaixo pra trazer o botão de volta.
           <div className="my-[26px] flex items-center gap-3">
             <div className="h-px flex-1 bg-[#e5e7eb]" />
             <span className="text-xs text-[#9ca3af]">{t("orContinueWith")}</span>
@@ -286,6 +290,7 @@ function LoginPageInner() {
             <GoogleIcon />
             {googleLoading ? t("signingIn") : t("signInWithGoogle")}
           </button>
+          */}
 
           <div className="mt-4 flex items-center justify-center gap-4 text-xs text-[#6b7280]">
             <Link href="/termos" className="hover:text-[#374151]">
