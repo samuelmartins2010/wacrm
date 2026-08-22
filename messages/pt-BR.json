@@ -1159,7 +1159,12 @@
         "advanceAfterSending": "Após o envio, avançar para",
         "pickNextNode": "Escolha o próximo nó…",
         "none": "— Nenhum —",
-        "pickTagPlaceholder": "Escolha uma tag…"
+        "pickTagPlaceholder": "Escolha uma tag…",
+        "bodyTextLabel": "Texto do corpo",
+        "removeSectionAria": "Remover seção",
+        "fileUploaded": "Arquivo enviado.",
+        "uploadFailed": "Falha no envio.",
+        "fileTooLarge": "O arquivo tem {size} MB — o limite é 16 MB."
       },
       "categories": {
         "messaging": "Mensagens",
@@ -1173,7 +1178,7 @@
         },
         "send_message": {
           "label": "Enviar mensagem",
-          "blurb": "Envia uma mensagem de texto do WhatsApp"
+          "blurb": "Envia uma mensagem de texto no WhatsApp"
         },
         "send_buttons": {
           "label": "Enviar botões",
@@ -1188,7 +1193,7 @@
           "blurb": "Envia uma imagem, vídeo ou documento"
         },
         "collect_input": {
-          "label": "Coletar entrada",
+          "label": "Coletar dado",
           "blurb": "Faz uma pergunta e salva a resposta"
         },
         "condition": {
@@ -1196,12 +1201,12 @@
           "blurb": "Ramifica com base em uma regra"
         },
         "set_tag": {
-          "label": "Etiquetar contato",
-          "blurb": "Adiciona ou remove uma etiqueta do contato"
+          "label": "Marcar contato",
+          "blurb": "Adiciona ou remove uma tag do contato"
         },
         "handoff": {
           "label": "Transferir para agente",
-          "blurb": "Passa a conversa para um humano"
+          "blurb": "Transfere a conversa para um humano"
         },
         "end": {
           "label": "Fim",
@@ -1222,7 +1227,8 @@
       "statusDraft": "Rascunho",
       "statusActive": "Ativo",
       "statusArchived": "Arquivado",
-      "flowDescriptionAria": "Descrição do fluxo"
+      "flowDescriptionAria": "Descrição do fluxo",
+      "editorViewAria": "Modo de edição"
     },
     "validation": {
       "noIssues": "Nenhum problema. Pronto para ativar.",
@@ -1234,7 +1240,14 @@
       "fixIssues": "Corrija os problemas abaixo antes de ativar.",
       "statusActivated": "Fluxo ativado.",
       "statusArchived": "Arquivado.",
-      "statusDraft": "Salvo como rascunho."
+      "statusDraft": "Salvo como rascunho.",
+      "saveFailedGeneric": "Falha ao salvar",
+      "saveFailedWithStatus": "Falha ao salvar: {status}",
+      "statusUpdateFailedGeneric": "Falha ao atualizar o status",
+      "statusUpdateFailedWithStatus": "Falha ao atualizar o status: {status}",
+      "deleteFailedGeneric": "Falha ao excluir",
+      "deleteFailedWithStatus": "Falha ao excluir: {status}",
+      "confirmDelete": "Excluir \"{name}\"? Todas as execuções ativas terminam imediatamente. Isso não pode ser desfeito."
     },
     "summary": {
       "options": "{count} {count, plural, =1 {opção} other {opções}}",

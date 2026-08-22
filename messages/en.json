@@ -1159,7 +1159,12 @@
         "advanceAfterSending": "After sending, advance to",
         "pickNextNode": "Pick a next node…",
         "none": "— None —",
-        "pickTagPlaceholder": "Pick a tag…"
+        "pickTagPlaceholder": "Pick a tag…",
+        "bodyTextLabel": "Body text",
+        "removeSectionAria": "Remove section",
+        "fileUploaded": "File uploaded.",
+        "uploadFailed": "Upload failed.",
+        "fileTooLarge": "File is {size} MB — limit is 16 MB."
       },
       "categories": {
         "messaging": "Messaging",
@@ -1222,7 +1227,8 @@
       "statusDraft": "Draft",
       "statusActive": "Active",
       "statusArchived": "Archived",
-      "flowDescriptionAria": "Flow description"
+      "flowDescriptionAria": "Flow description",
+      "editorViewAria": "Editor view"
     },
     "validation": {
       "noIssues": "No issues. Ready to activate.",
@@ -1234,7 +1240,14 @@
       "fixIssues": "Fix the issues below before activating.",
       "statusActivated": "Flow activated.",
       "statusArchived": "Archived.",
-      "statusDraft": "Saved as draft."
+      "statusDraft": "Saved as draft.",
+      "saveFailedGeneric": "Save failed",
+      "saveFailedWithStatus": "Save failed: {status}",
+      "statusUpdateFailedGeneric": "Status update failed",
+      "statusUpdateFailedWithStatus": "Status update failed: {status}",
+      "deleteFailedGeneric": "Delete failed",
+      "deleteFailedWithStatus": "Delete failed: {status}",
+      "confirmDelete": "Delete \"{name}\"? Any active runs end immediately. This can't be undone."
     },
     "summary": {
       "options": "{count} {count, plural, =1 {option} other {options}}",

@@ -79,11 +79,13 @@ export interface BuilderNode {
 
 export type NodeCategory = 'messaging' | 'logic' | 'flow';
 
-/** Category labels + the order they render in the add-step menu. */
-export const NODE_CATEGORIES: { id: NodeCategory; label: string }[] = [
-  { id: 'messaging', label: 'Messaging' },
-  { id: 'logic', label: 'Logic & data' },
-  { id: 'flow', label: 'Flow control' },
+/** Category ids + the order they render in the add-step menu. Labels
+ *  are looked up via `t('categories.<id>')` at each render site, not
+ *  stored here — this array only fixes the id list and its order. */
+export const NODE_CATEGORIES: { id: NodeCategory }[] = [
+  { id: 'messaging' },
+  { id: 'logic' },
+  { id: 'flow' },
 ];
 
 export const NODE_META: Record<
@@ -176,10 +178,9 @@ export const NODE_META: Record<
  */
 export function groupNodeTypesByCategory(
   types: NodeType[]
-): { id: NodeCategory; label: string; types: NodeType[] }[] {
-  return NODE_CATEGORIES.map(({ id, label }) => ({
+): { id: NodeCategory; types: NodeType[] }[] {
+  return NODE_CATEGORIES.map(({ id }) => ({
     id,
-    label,
     types: types.filter((t) => NODE_META[t].category === id),
   })).filter((group) => group.types.length > 0);
 }
