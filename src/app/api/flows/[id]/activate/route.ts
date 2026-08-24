@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { getTranslations } from 'next-intl/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { supabaseAdmin } from '@/lib/flows/admin-client'
@@ -81,6 +82,7 @@ export async function POST(
     if (!flow) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
+    const t = await getTranslations('Flows.validation.messages')
     const issues = validateFlowForActivation(
       flow as {
         name: string
@@ -93,6 +95,7 @@ export async function POST(
         node_type: string
         config: Record<string, unknown>
       }>,
+      t,
     )
     const blockers = issues.filter((i) => i.severity === 'error')
     if (blockers.length > 0) {

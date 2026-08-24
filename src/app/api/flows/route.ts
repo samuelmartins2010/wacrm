@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
+import { getTranslations } from 'next-intl/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { supabaseAdmin } from '@/lib/flows/admin-client'
-import { getFlowTemplate } from '@/lib/flows/templates'
+import { getFlowTemplate, getLocalizedFlowTemplate } from '@/lib/flows/templates'
 
 /**
  * GET /api/flows — list the caller's flows.
@@ -100,13 +101,15 @@ export async function POST(request: Request) {
 
   // -------- Template clone path --------
   if (body.template_slug) {
-    const template = getFlowTemplate(body.template_slug)
-    if (!template) {
+    const rawTemplate = getFlowTemplate(body.template_slug)
+    if (!rawTemplate) {
       return NextResponse.json(
         { error: `Unknown template_slug "${body.template_slug}"` },
         { status: 400 },
       )
     }
+    const t = await getTranslations('Flows.templates')
+    const template = getLocalizedFlowTemplate(body.template_slug, t) ?? rawTemplate
     const { data: flow, error: flowErr } = await admin
       .from('flows')
       .insert({

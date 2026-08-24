@@ -239,6 +239,7 @@ export function FlowEditorProvider({
 }: ProviderProps) {
   const router = useRouter();
   const t = useTranslations("Flows.editorState");
+  const tValidation = useTranslations("Flows.validation.messages");
 
   const [state, setStateRaw] = useState<BuilderState>(() => ({
     name: initialFlow.name,
@@ -320,8 +321,9 @@ export function FlowEditorProvider({
           entry_node_id: state.entry_node_id,
         },
         state.nodes,
+        tValidation,
       ),
-    [state],
+    [state, tValidation],
   );
   const canActivate = useMemo(
     () => issues.every((i) => i.severity !== "error"),

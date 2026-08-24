@@ -1233,7 +1233,65 @@
     "validation": {
       "noIssues": "No issues. Ready to activate.",
       "summary": "{errorCount} {errorCount, plural, =1 {error} other {errors}}, {warningCount} {warningCount, plural, =1 {warning} other {warnings}}",
-      "jumpToNode": "Jump to node {key}"
+      "jumpToNode": "Jump to node {key}",
+      "messages": {
+        "nameRequired": "Flow name is required.",
+        "keywordTriggerNeedsOne": "Keyword triggers need at least one keyword.",
+        "keywordsBlank": "{count} {count, plural, =1 {keyword is} other {keywords are}} blank — they won't match anything.",
+        "pickEntryNode": "Pick an entry node before activating.",
+        "needsAtLeastOneNode": "A flow needs at least one node before activation.",
+        "entryNodeNotExist": "Entry node \"{key}\" doesn't exist.",
+        "duplicateNodeKey": "Duplicate node_key \"{key}\".",
+        "nodeUnreachable": "Node \"{key}\" is unreachable from the entry node.",
+        "startNeedsNext": "Start node must point to a next node.",
+        "startPointsToMissing": "Start points to non-existent node \"{key}\".",
+        "sendMessageNeedsText": "Send-message node needs a text body.",
+        "sendMessageNeedsNext": "Send-message node must point to a next node.",
+        "sendMessagePointsToMissing": "Send-message points to non-existent node \"{key}\".",
+        "sendMediaNeedsType": "Send-media node needs a media type (image, video, or document).",
+        "sendMediaNeedsFile": "Send-media node needs a file (upload one before activating).",
+        "captionExceeds": "Caption exceeds {limit} chars (WhatsApp limit).",
+        "sendMediaNeedsNext": "Send-media node must point to a next node.",
+        "sendMediaPointsToMissing": "Send-media points to non-existent node \"{key}\".",
+        "sendButtonsNeedsText": "Send-buttons node needs a text body.",
+        "sendButtonsNeedsOne": "Send-buttons needs at least one button.",
+        "buttonsMaxAllowed": "WhatsApp allows at most {max} buttons per message.",
+        "buttonNeedsReplyId": "Button {index} needs a reply id.",
+        "duplicateButtonReplyId": "Duplicate button reply id \"{id}\".",
+        "buttonNeedsTitle": "Button {index} needs a title.",
+        "buttonTitleTooLong": "Button {index} title is over {limit} chars (WhatsApp limit).",
+        "buttonNeedsNext": "Button {index} needs a next node.",
+        "buttonPointsToMissing": "Button {index} points to non-existent node \"{key}\".",
+        "sendListNeedsText": "Send-list node needs a text body.",
+        "sendListNeedsButtonLabel": "Send-list needs a button label (the tap-to-expand text).",
+        "sendListNeedsOneRow": "Send-list needs at least one row.",
+        "listRowsMaxAllowed": "Send-list allows at most {max} rows total across sections.",
+        "rowNeedsReplyId": "Row {row} in section {section} needs a reply id.",
+        "duplicateListRowId": "Duplicate list row id \"{id}\".",
+        "rowNeedsTitle": "Row {row} needs a title.",
+        "rowTitleTooLong": "Row {row} title exceeds {limit} chars.",
+        "rowDescriptionTooLong": "Row {row} description exceeds {limit} chars.",
+        "rowNeedsNext": "Row {row} needs a next node.",
+        "rowPointsToMissing": "Row {row} points to non-existent node \"{key}\".",
+        "collectInputNeedsPrompt": "Collect-input needs a prompt to send the customer.",
+        "collectInputNeedsVarKey": "Collect-input needs a var_key to store the answer under.",
+        "varKeyInvalid": "var_key \"{key}\" must be alphanumeric+underscore and start with a letter or underscore.",
+        "collectInputNeedsNext": "Collect-input must point to a next node.",
+        "collectInputPointsToMissing": "Collect-input points to non-existent node \"{key}\".",
+        "conditionNeedsSubject": "Condition needs a subject (var / tag / contact_field).",
+        "conditionNeedsSubjectKey": "Condition needs a subject_key (var name, tag id, or field name).",
+        "conditionNeedsOperator": "Condition needs an operator.",
+        "operatorNeedsValueWarning": "Operator \"{op}\" usually expects a comparison value — empty value will only match empty subjects.",
+        "conditionBranchNeedsNode": "Condition needs a node for the \"{branch}\" branch.",
+        "conditionBranchPointsToMissing": "Condition's \"{branch}\" points to non-existent node \"{key}\".",
+        "branchTrue": "true",
+        "branchFalse": "false",
+        "setTagNeedsMode": "Set-tag needs a mode (add or remove).",
+        "setTagNeedsTag": "Set-tag needs a tag to apply.",
+        "setTagNeedsNext": "Set-tag must point to a next node.",
+        "setTagPointsToMissing": "Set-tag points to non-existent node \"{key}\".",
+        "unknownNodeType": "Unknown node type \"{type}\"."
+      }
     },
     "editorState": {
       "saved": "Saved.",
@@ -1270,15 +1328,44 @@
     "templates": {
       "welcome_menu": {
         "name": "Welcome menu",
-        "description": "Greet customers who type a keyword and route them to the right agent based on whether they're new or existing."
+        "description": "Greet customers who type a keyword and route them to the right agent based on whether they're new or existing.",
+        "content": {
+          "welcomeText": "Hi! 👋 Welcome to support. Are you an existing customer or new here?",
+          "welcomeFooter": "Tap a button below to continue.",
+          "existingButton": "Existing customer",
+          "newButton": "New customer",
+          "existingNote": "Existing customer needs assistance — please check account history before replying.",
+          "newNote": "New customer — share pricing + onboarding link."
+        }
       },
       "faq_bot": {
         "name": "FAQ bot",
-        "description": "Answer common questions automatically. Customer picks a topic from a list; the bot replies with the answer and ends."
+        "description": "Answer common questions automatically. Customer picks a topic from a list; the bot replies with the answer and ends.",
+        "content": {
+          "topicsText": "What can I help you with?",
+          "topicsButtonLabel": "View topics",
+          "sectionCommon": "Common questions",
+          "rowHours": "Opening hours",
+          "rowPricing": "Pricing",
+          "rowRefunds": "Refund policy",
+          "sectionOther": "Other",
+          "rowHuman": "Talk to a human",
+          "answerHours": "We're open Mon–Fri, 9am–6pm local time. Weekend support is limited to urgent issues.",
+          "answerPricing": "Our pricing starts at $9/mo. Visit https://example.com/pricing for the full breakdown.",
+          "answerRefunds": "Refunds are honored within 30 days of purchase. Reply with your order number and we'll process it.",
+          "humanHandoffNote": "Customer asked to talk to a human from the FAQ bot."
+        }
       },
       "lead_capture": {
         "name": "Lead capture",
-        "description": "Greet first-time inbounds, capture name + email + company, then hand off to sales with the answers in the note."
+        "description": "Greet first-time inbounds, capture name + email + company, then hand off to sales with the answers in the note.",
+        "content": {
+          "introText": "Welcome! 👋 I'll ask a few quick questions so we can get you to the right person.",
+          "askNamePrompt": "What's your name?",
+          "askEmailPrompt": "Thanks '{{vars.name}}'! What's your work email?",
+          "askCompanyPrompt": "Almost done — what's your company name?",
+          "handoffNote": "New lead — name='{{vars.name}}', email='{{vars.email}}', company='{{vars.company}}'."
+        }
       }
     }
   },

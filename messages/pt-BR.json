@@ -1233,7 +1233,65 @@
     "validation": {
       "noIssues": "Nenhum problema. Pronto para ativar.",
       "summary": "{errorCount} {errorCount, plural, =1 {erro} other {erros}}, {warningCount} {warningCount, plural, =1 {aviso} other {avisos}}",
-      "jumpToNode": "Ir para o nó {key}"
+      "jumpToNode": "Ir para o nó {key}",
+      "messages": {
+        "nameRequired": "O nome do fluxo é obrigatório.",
+        "keywordTriggerNeedsOne": "Gatilhos por palavra-chave precisam de pelo menos uma palavra-chave.",
+        "keywordsBlank": "{count} {count, plural, =1 {palavra-chave está} other {palavras-chave estão}} em branco — elas não vão corresponder a nada.",
+        "pickEntryNode": "Escolha um nó de entrada antes de ativar.",
+        "needsAtLeastOneNode": "Um fluxo precisa de pelo menos um nó antes de ativar.",
+        "entryNodeNotExist": "O nó de entrada \"{key}\" não existe.",
+        "duplicateNodeKey": "node_key duplicado \"{key}\".",
+        "nodeUnreachable": "O nó \"{key}\" é inalcançável a partir do nó de entrada.",
+        "startNeedsNext": "O nó de início deve apontar para um próximo nó.",
+        "startPointsToMissing": "O início aponta para um nó inexistente \"{key}\".",
+        "sendMessageNeedsText": "O nó de enviar mensagem precisa de um texto no corpo.",
+        "sendMessageNeedsNext": "O nó de enviar mensagem deve apontar para um próximo nó.",
+        "sendMessagePointsToMissing": "Enviar mensagem aponta para um nó inexistente \"{key}\".",
+        "sendMediaNeedsType": "O nó de enviar mídia precisa de um tipo de mídia (imagem, vídeo ou documento).",
+        "sendMediaNeedsFile": "O nó de enviar mídia precisa de um arquivo (envie um antes de ativar).",
+        "captionExceeds": "A legenda excede {limit} caracteres (limite do WhatsApp).",
+        "sendMediaNeedsNext": "O nó de enviar mídia deve apontar para um próximo nó.",
+        "sendMediaPointsToMissing": "Enviar mídia aponta para um nó inexistente \"{key}\".",
+        "sendButtonsNeedsText": "O nó de enviar botões precisa de um texto no corpo.",
+        "sendButtonsNeedsOne": "Enviar botões precisa de pelo menos um botão.",
+        "buttonsMaxAllowed": "O WhatsApp permite no máximo {max} botões por mensagem.",
+        "buttonNeedsReplyId": "O botão {index} precisa de um reply id.",
+        "duplicateButtonReplyId": "Reply id de botão duplicado \"{id}\".",
+        "buttonNeedsTitle": "O botão {index} precisa de um título.",
+        "buttonTitleTooLong": "O título do botão {index} tem mais de {limit} caracteres (limite do WhatsApp).",
+        "buttonNeedsNext": "O botão {index} precisa de um próximo nó.",
+        "buttonPointsToMissing": "O botão {index} aponta para um nó inexistente \"{key}\".",
+        "sendListNeedsText": "O nó de enviar lista precisa de um texto no corpo.",
+        "sendListNeedsButtonLabel": "Enviar lista precisa de um texto de botão (o texto para expandir).",
+        "sendListNeedsOneRow": "Enviar lista precisa de pelo menos uma linha.",
+        "listRowsMaxAllowed": "Enviar lista permite no máximo {max} linhas no total entre as seções.",
+        "rowNeedsReplyId": "A linha {row} na seção {section} precisa de um reply id.",
+        "duplicateListRowId": "ID de linha de lista duplicado \"{id}\".",
+        "rowNeedsTitle": "A linha {row} precisa de um título.",
+        "rowTitleTooLong": "O título da linha {row} excede {limit} caracteres.",
+        "rowDescriptionTooLong": "A descrição da linha {row} excede {limit} caracteres.",
+        "rowNeedsNext": "A linha {row} precisa de um próximo nó.",
+        "rowPointsToMissing": "A linha {row} aponta para um nó inexistente \"{key}\".",
+        "collectInputNeedsPrompt": "Coletar dado precisa de uma pergunta para enviar ao cliente.",
+        "collectInputNeedsVarKey": "Coletar dado precisa de uma var_key para armazenar a resposta.",
+        "varKeyInvalid": "var_key \"{key}\" deve ser alfanumérica com underscore e começar com letra ou underscore.",
+        "collectInputNeedsNext": "Coletar dado deve apontar para um próximo nó.",
+        "collectInputPointsToMissing": "Coletar dado aponta para um nó inexistente \"{key}\".",
+        "conditionNeedsSubject": "A condição precisa de um assunto (var / tag / contact_field).",
+        "conditionNeedsSubjectKey": "A condição precisa de uma subject_key (nome da var, id da tag ou nome do campo).",
+        "conditionNeedsOperator": "A condição precisa de um operador.",
+        "operatorNeedsValueWarning": "O operador \"{op}\" geralmente espera um valor de comparação — um valor vazio só vai corresponder a assuntos vazios.",
+        "conditionBranchNeedsNode": "A condição precisa de um nó para o ramo \"{branch}\".",
+        "conditionBranchPointsToMissing": "O ramo \"{branch}\" da condição aponta para um nó inexistente \"{key}\".",
+        "branchTrue": "verdadeiro",
+        "branchFalse": "falso",
+        "setTagNeedsMode": "Marcar contato precisa de um modo (adicionar ou remover).",
+        "setTagNeedsTag": "Marcar contato precisa de uma tag para aplicar.",
+        "setTagNeedsNext": "Marcar contato deve apontar para um próximo nó.",
+        "setTagPointsToMissing": "Marcar contato aponta para um nó inexistente \"{key}\".",
+        "unknownNodeType": "Tipo de nó desconhecido \"{type}\"."
+      }
     },
     "editorState": {
       "saved": "Salvo.",
@@ -1270,15 +1328,44 @@
     "templates": {
       "welcome_menu": {
         "name": "Menu de boas-vindas",
-        "description": "Recebe clientes que digitam uma palavra-chave e os direciona ao agente certo, conforme sejam novos ou existentes."
+        "description": "Recebe clientes que digitam uma palavra-chave e os direciona ao agente certo, conforme sejam novos ou existentes.",
+        "content": {
+          "welcomeText": "Oi! 👋 Bem-vindo(a) ao suporte. Você já é cliente ou é novo por aqui?",
+          "welcomeFooter": "Toque em um botão abaixo para continuar.",
+          "existingButton": "Já sou cliente",
+          "newButton": "Sou novo cliente",
+          "existingNote": "Cliente existente precisa de assistência — confira o histórico da conta antes de responder.",
+          "newNote": "Cliente novo — envie preços + link de onboarding."
+        }
       },
       "faq_bot": {
         "name": "Bot de perguntas frequentes",
-        "description": "Responde perguntas comuns automaticamente. O cliente escolhe um tópico numa lista; o bot responde e encerra."
+        "description": "Responde perguntas comuns automaticamente. O cliente escolhe um tópico numa lista; o bot responde e encerra.",
+        "content": {
+          "topicsText": "Com o que posso te ajudar?",
+          "topicsButtonLabel": "Ver tópicos",
+          "sectionCommon": "Perguntas comuns",
+          "rowHours": "Horário de funcionamento",
+          "rowPricing": "Preços",
+          "rowRefunds": "Política de reembolso",
+          "sectionOther": "Outros",
+          "rowHuman": "Falar com um humano",
+          "answerHours": "Funcionamos de segunda a sexta, das 9h às 18h (horário local). O suporte de fim de semana é limitado a casos urgentes.",
+          "answerPricing": "Nossos preços começam em R$ 49/mês. Acesse https://example.com/pricing para ver todos os detalhes.",
+          "answerRefunds": "Reembolsos são concedidos em até 30 dias após a compra. Responda com o número do seu pedido e vamos processar.",
+          "humanHandoffNote": "Cliente pediu para falar com um humano a partir do bot de FAQ."
+        }
       },
       "lead_capture": {
         "name": "Captura de leads",
-        "description": "Recebe contatos novos, coleta nome + e-mail + empresa e encaminha para vendas com as respostas na nota."
+        "description": "Recebe contatos novos, coleta nome + e-mail + empresa e encaminha para vendas com as respostas na nota.",
+        "content": {
+          "introText": "Bem-vindo(a)! 👋 Vou fazer algumas perguntas rápidas para te encaminhar à pessoa certa.",
+          "askNamePrompt": "Qual é o seu nome?",
+          "askEmailPrompt": "Obrigado, '{{vars.name}}'! Qual é o seu e-mail de trabalho?",
+          "askCompanyPrompt": "Quase lá — qual é o nome da sua empresa?",
+          "handoffNote": "Novo lead — nome='{{vars.name}}', e-mail='{{vars.email}}', empresa='{{vars.company}}'."
+        }
       }
     }
   },
