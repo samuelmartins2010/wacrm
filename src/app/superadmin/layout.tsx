@@ -1,16 +1,14 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import { isSuperAdminEmail } from '@/lib/superadmin/auth'
+import { requirePlatformAdmin } from '@/lib/superadmin/auth'
 
 export default async function SuperAdminLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user || !isSuperAdminEmail(user.email, process.env.SUPER_ADMIN_EMAIL)) {
+  try {
+    await requirePlatformAdmin()
+  } catch {
     redirect('/dashboard')
   }
 

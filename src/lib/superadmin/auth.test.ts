@@ -1,28 +1,24 @@
 import { describe, it, expect } from 'vitest'
-import { isSuperAdminEmail } from './auth'
+import { hasRequiredRole } from './auth'
 
-describe('isSuperAdminEmail', () => {
-  it('returns true when email matches env var exactly', () => {
-    expect(isSuperAdminEmail('admin@example.com', 'admin@example.com')).toBe(true)
+describe('hasRequiredRole', () => {
+  it('returns true when role is in the allowed list', () => {
+    expect(hasRequiredRole('superadmin', ['superadmin', 'financeiro'])).toBe(true)
   })
 
-  it('is case-insensitive', () => {
-    expect(isSuperAdminEmail('Admin@Example.COM', 'admin@example.com')).toBe(true)
+  it('returns false when role is not in the allowed list', () => {
+    expect(hasRequiredRole('suporte', ['superadmin', 'financeiro'])).toBe(false)
   })
 
-  it('returns false when email does not match', () => {
-    expect(isSuperAdminEmail('other@example.com', 'admin@example.com')).toBe(false)
+  it('returns false when role is null', () => {
+    expect(hasRequiredRole(null, ['superadmin'])).toBe(false)
   })
 
-  it('returns false when user email is undefined', () => {
-    expect(isSuperAdminEmail(undefined, 'admin@example.com')).toBe(false)
+  it('returns false when role is undefined', () => {
+    expect(hasRequiredRole(undefined, ['superadmin'])).toBe(false)
   })
 
-  it('returns false when env var is not set', () => {
-    expect(isSuperAdminEmail('admin@example.com', undefined)).toBe(false)
-  })
-
-  it('returns false when both are undefined', () => {
-    expect(isSuperAdminEmail(undefined, undefined)).toBe(false)
+  it('returns false when allowed list is empty', () => {
+    expect(hasRequiredRole('superadmin', [])).toBe(false)
   })
 })

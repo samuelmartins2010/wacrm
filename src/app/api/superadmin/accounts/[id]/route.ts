@@ -1,7 +1,8 @@
 // PATCH — update plan, status, renewal_date, notes for an account.
 
 import { NextResponse } from 'next/server'
-import { requireSuperAdmin, toErrorResponse } from '@/lib/superadmin/auth'
+import { requirePlatformAdmin, toErrorResponse } from '@/lib/superadmin/auth'
+import { logAdminAction } from '@/lib/superadmin/audit'
 
 const VALID_STATUSES = ['active', 'suspended', 'trial'] as const
 const VALID_PLANS = ['basic', 'pro'] as const
@@ -14,7 +15,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { admin } = await requireSuperAdmin()
+    // Same placeholder scoping as POST /accounts — see comment there.
+    const { admin, userId, email, role } = await requirePlatformAdmin(['superadmin'])
     const { id } = await params
 
     const body = (await request.json().catch(() => null)) as {
@@ -72,6 +74,12 @@ export async function PATCH(
       console.error('[PATCH /api/superadmin/accounts/[id]]', error)
       return NextResponse.json({ error: 'Failed to update account' }, { status: 500 })
     }
+
+    await logAdminAction(
+      admin,
+      { userId, email, role },
+      { action: 'account.update', targetType: 'account', targetId: id, metadata: update },
+    )
 
     return NextResponse.json({ ok: true })
   } catch (err) {

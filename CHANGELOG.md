@@ -9,6 +9,27 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [Unreleased]
+
+> **Migration required:** apply `supabase/migrations/038_platform_admin_rbac_audit.sql`,
+> then manually insert your own user into `platform_admins` with role
+> `superadmin` **before** deploying this code (see migration header
+> comment) — otherwise nobody can reach `/superadmin` after deploy.
+
+### Changed
+
+- **Super Admin access is now role-based**, backed by a new
+  `platform_admins` table (`superadmin` / `financeiro` / `suporte` /
+  `comercial`), replacing the single `SUPER_ADMIN_EMAIL` string
+  comparison. Today only the `superadmin` role can do anything —
+  the other roles exist as placeholders until a real permissions
+  matrix is designed.
+- **Every superadmin mutation is now audit-logged** to the new
+  `platform_admin_audit_log` table (append-only — a trigger blocks
+  UPDATE/DELETE unconditionally, including from the service role).
+  Reads are not logged yet, only mutations (`account.create`,
+  `account.update`).
+
 ## [0.9.0] — 2026-07-21
 
 Adds multi-tenant SaaS support: one installation now serves multiple

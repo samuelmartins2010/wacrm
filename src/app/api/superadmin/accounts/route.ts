@@ -2,11 +2,13 @@
 // POST — invite a new client (creates auth user + updates their auto-created account)
 
 import { NextResponse } from 'next/server'
-import { requireSuperAdmin, toErrorResponse } from '@/lib/superadmin/auth'
+import { requirePlatformAdmin, toErrorResponse } from '@/lib/superadmin/auth'
+import { logAdminAction } from '@/lib/superadmin/audit'
 
 export async function GET() {
   try {
-    const { admin } = await requireSuperAdmin()
+    // Any active platform admin can read the accounts list.
+    const { admin } = await requirePlatformAdmin()
 
     const { data, error } = await admin
       .from('accounts')
@@ -37,7 +39,10 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { admin } = await requireSuperAdmin()
+    // Placeholder role scoping: creating a client account is
+    // superadmin-only until the real permissions matrix
+    // (README's "Configurações > Permissões") is designed.
+    const { admin, userId: actorUserId, email: actorEmail, role } = await requirePlatformAdmin(['superadmin'])
 
     const body = (await request.json().catch(() => null)) as {
       email?: unknown
@@ -107,6 +112,17 @@ export async function POST(request: Request) {
       console.error('[POST /api/superadmin/accounts] update error:', updateError)
       return NextResponse.json({ error: 'Failed to configure account' }, { status: 500 })
     }
+
+    await logAdminAction(
+      admin,
+      { userId: actorUserId, email: actorEmail, role },
+      {
+        action: 'account.create',
+        targetType: 'account',
+        targetId: account.id,
+        metadata: { invitedEmail: email, accountName, plan },
+      },
+    )
 
     return NextResponse.json(
       { accountId: account.id, userId, email },
