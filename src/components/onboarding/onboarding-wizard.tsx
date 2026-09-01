@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-type Step = 0 | 1 | 2 | 3
+type Step = 0 | 1 | 2
 
 const MIN_PASSWORD = 8
 
@@ -43,9 +43,6 @@ export function OnboardingWizard() {
   const [settingPassword, setSettingPassword] = useState(false)
   const [businessName, setBusinessName] = useState('')
   const [segment, setSegment] = useState('')
-  const [phoneNumberId, setPhoneNumberId] = useState('')
-  const [wabaId, setWabaId] = useState('')
-  const [accessToken, setAccessToken] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -136,34 +133,31 @@ export function OnboardingWizard() {
     setSaving(true)
     setSaveError(null)
     try {
-      // Delegate to the existing config endpoint which handles
-      // credential verification, encryption, and registration.
-      const res = await fetch('/api/whatsapp/config', {
-        method: 'POST',
+      // WhatsApp connection moved out of onboarding entirely — it's
+      // configured later in Settings, where the exact same form
+      // already exists (whatsapp-config.tsx). Forcing Meta credentials
+      // before a brand-new trial user has even set those up in Meta
+      // Business was blocking onboarding for no reason.
+      const res = await fetch('/api/account', {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone_number_id: phoneNumberId,
-          waba_id: wabaId,
-          access_token: accessToken,
-          // business_name is stored on the account row, not the config.
-          ...(businessName ? { business_name: businessName } : {}),
-        }),
+        body: JSON.stringify({ name: businessName }),
       })
 
       const json = await res.json()
 
       if (!res.ok) {
-        setSaveError(json.error ?? 'Erro ao salvar configuração')
+        setSaveError(json.error ?? 'Erro ao salvar')
         return
       }
 
-      setStep(3)
+      setStep(2)
     } finally {
       setSaving(false)
     }
   }
 
-  if (step === 3) {
+  if (step === 2) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-6">
         <div className="w-full max-w-md text-center space-y-6">
@@ -173,6 +167,7 @@ export function OnboardingWizard() {
             Seu CRM está pronto para uso.
           </p>
           <ul className="text-sm text-left space-y-2 text-muted-foreground">
+            <li>→ Conecte seu WhatsApp em Configurações</li>
             <li>→ Importe seus primeiros contatos</li>
             <li>→ Configure respostas rápidas</li>
             <li>→ Convide sua equipe</li>
@@ -190,7 +185,7 @@ export function OnboardingWizard() {
       <div className="w-full max-w-md space-y-6">
         {/* Progress indicator */}
         <div className="flex gap-2">
-          {[1, 2].map((s) => (
+          {[1].map((s) => (
             <div
               key={s}
               className={`h-1 flex-1 rounded-full transition-colors ${
@@ -205,7 +200,7 @@ export function OnboardingWizard() {
             <div>
               <h1 className="text-2xl font-bold">Bem-vindo!</h1>
               <p className="text-muted-foreground mt-1 text-sm">
-                Vamos configurar seu CRM em 2 passos rápidos.
+                Só mais um passo antes de começar.
               </p>
             </div>
 
@@ -226,7 +221,7 @@ export function OnboardingWizard() {
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="w-72">
                     {SEGMENTS.map((s) => (
                       <SelectItem key={s.value} value={s.value}>
                         {s.label}
@@ -235,72 +230,18 @@ export function OnboardingWizard() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-
-            <Button className="w-full" onClick={() => setStep(2)}>
-              Próximo →
-            </Button>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="space-y-6">
-            <div>
-              <h1 className="text-2xl font-bold">Conectar WhatsApp</h1>
-              <p className="text-muted-foreground mt-1 text-sm">
-                Cole as credenciais do Meta Business.
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="phoneNumberId">Phone Number ID</Label>
-                <Input
-                  id="phoneNumberId"
-                  value={phoneNumberId}
-                  onChange={(e) => setPhoneNumberId(e.target.value)}
-                  placeholder="1234567890"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="wabaId">WhatsApp Business Account ID</Label>
-                <Input
-                  id="wabaId"
-                  value={wabaId}
-                  onChange={(e) => setWabaId(e.target.value)}
-                  placeholder="0987654321"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="accessToken">Token de Acesso</Label>
-                <Input
-                  id="accessToken"
-                  type="password"
-                  value={accessToken}
-                  onChange={(e) => setAccessToken(e.target.value)}
-                  placeholder="EAABcde..."
-                />
-              </div>
 
               {saveError && (
                 <p className="text-sm text-destructive">{saveError}</p>
               )}
             </div>
 
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setStep(1)} className="flex-1">
-                ← Voltar
-              </Button>
-            </div>
-
             <Button
               className="w-full"
               onClick={handleSaveAndFinish}
-              disabled={saving || !phoneNumberId || !wabaId || !accessToken}
+              disabled={saving || !businessName}
             >
-              {saving ? 'Salvando...' : 'Salvar e Concluir ✓'}
+              {saving ? 'Salvando...' : 'Concluir ✓'}
             </Button>
           </div>
         )}
