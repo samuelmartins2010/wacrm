@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
@@ -19,6 +19,7 @@ import {
   Radio,
   Settings,
   Shield,
+  ShieldCheck,
   User,
   UserCog,
   Users,
@@ -118,6 +119,16 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const t = useTranslations("Sidebar");
   const pathname = usePathname();
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  useEffect(() => {
+    // Best-effort, silent on failure — this only decides whether to
+    // show a menu shortcut, never gates access itself. Actual access
+    // control still happens server-side in /superadmin's layout.
+    fetch("/api/superadmin/me")
+      .then((res) => res.json())
+      .then((data) => setIsPlatformAdmin(!!data.isPlatformAdmin))
+      .catch(() => setIsPlatformAdmin(false));
+  }, []);
   // Mirrors the login page's wordmark — but that PNG's text is baked
   // in white for the login screen's fixed dark-green panel. The
   // dashboard sidebar isn't fixed to one background (light/dark mode
@@ -396,6 +407,20 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 <Settings className="size-4" />
                 {t("menuSettings")}
               </DropdownMenuItem>
+              {isPlatformAdmin && (
+                <DropdownMenuItem
+                  render={
+                    <Link
+                      href="/superadmin"
+                      onClick={onClose}
+                      className="text-popover-foreground focus:bg-accent focus:text-accent-foreground"
+                    />
+                  }
+                >
+                  <ShieldCheck className="size-4" />
+                  Super Admin
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator className="bg-border" />
               <DropdownMenuItem
                 onClick={signOut}
