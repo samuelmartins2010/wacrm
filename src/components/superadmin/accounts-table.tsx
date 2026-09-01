@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { CreateAccountModal } from './create-account-modal'
 import { EditAccountDrawer } from './edit-account-drawer'
+import { formatDocument } from '@/lib/documents/br-document'
+import { isExpiringSoon, isExpired } from '@/lib/superadmin/account-status'
 
 type AccountStatus = 'active' | 'suspended' | 'trial'
 type AccountPlan = 'basic' | 'pro'
@@ -18,6 +20,8 @@ interface AccountRow {
   renewal_date: string | null
   notes: string | null
   suspended_at: string | null
+  document: string | null
+  phone: string | null
   created_at: string
   profiles: { email: string; full_name: string } | null
 }
@@ -26,17 +30,6 @@ const STATUS_BADGE: Record<AccountStatus, { label: string; variant: 'default' | 
   active: { label: 'Ativo', variant: 'default' },
   trial: { label: 'Trial', variant: 'secondary' },
   suspended: { label: 'Suspenso', variant: 'destructive' },
-}
-
-function isExpiringSoon(renewalDate: string | null): boolean {
-  if (!renewalDate) return false
-  const diff = new Date(renewalDate).getTime() - Date.now()
-  return diff > 0 && diff <= 7 * 24 * 60 * 60 * 1000
-}
-
-function isExpired(renewalDate: string | null): boolean {
-  if (!renewalDate) return false
-  return new Date(renewalDate).getTime() < Date.now()
 }
 
 export function AccountsTable() {
@@ -85,7 +78,19 @@ export function AccountsTable() {
                 const badge = STATUS_BADGE[acc.status]
                 return (
                   <tr key={acc.id} className="bg-card hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-medium">{acc.name}</td>
+                    <td className="px-4 py-3 font-medium">
+                      {acc.name}
+                      {(acc.document || acc.phone) && (
+                        <div className="text-xs font-normal text-muted-foreground mt-0.5">
+                          {[
+                            acc.document ? formatDocument(acc.document) : null,
+                            acc.phone ? acc.phone.replace(/^55(\d{2})(\d{4,5})(\d{4})$/, '($1) $2-$3') : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {acc.profiles?.email ?? '—'}
                     </td>

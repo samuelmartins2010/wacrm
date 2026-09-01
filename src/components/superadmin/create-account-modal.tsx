@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { validateDocument, normalizeDocument, formatDocument } from '@/lib/documents/br-document'
 import {
   Dialog,
   DialogContent,
@@ -31,13 +32,23 @@ export function CreateAccountModal({ open, onClose, onCreated }: Props) {
   const [accountName, setAccountName] = useState('')
   const [plan, setPlan] = useState<'basic' | 'pro'>('basic')
   const [renewalDate, setRenewalDate] = useState('')
+  const [document, setDocument] = useState('')
+  const [phone, setPhone] = useState('')
   const [saving, setSaving] = useState(false)
+
+  const documentValid = validateDocument(document) !== null
+  const documentTouched = document.length > 0
+  const phoneDigits = phone.replace(/\D/g, '')
+  const phoneValid = phoneDigits.length === 10 || phoneDigits.length === 11
+  const phoneTouched = phone.length > 0
 
   const reset = () => {
     setEmail('')
     setAccountName('')
     setPlan('basic')
     setRenewalDate('')
+    setDocument('')
+    setPhone('')
   }
 
   const handleClose = () => {
@@ -45,16 +56,28 @@ export function CreateAccountModal({ open, onClose, onCreated }: Props) {
     onClose()
   }
 
+  const handleDocumentChange = (raw: string) => {
+    const digits = normalizeDocument(raw).slice(0, 14)
+    setDocument(digits.length === 11 || digits.length === 14 ? formatDocument(digits) : digits)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email || !accountName) return
+    if (!email || !accountName || !documentValid || !phoneValid) return
 
     setSaving(true)
     try {
       const res = await fetch('/api/superadmin/accounts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, accountName, plan, renewalDate }),
+        body: JSON.stringify({
+          email,
+          accountName,
+          plan,
+          renewalDate,
+          document,
+          phone,
+        }),
       })
 
       const json = await res.json()
@@ -117,6 +140,34 @@ export function CreateAccountModal({ open, onClose, onCreated }: Props) {
           </div>
 
           <div className="space-y-1.5">
+            <Label htmlFor="document">CPF/CNPJ *</Label>
+            <Input
+              id="document"
+              value={document}
+              onChange={(e) => handleDocumentChange(e.target.value)}
+              placeholder="000.000.000-00 ou 00.000.000/0000-00"
+              required
+            />
+            {documentTouched && !documentValid && (
+              <p className="text-xs text-destructive">CPF/CNPJ inválido — confira os dígitos.</p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="phone">Telefone *</Label>
+            <Input
+              id="phone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="(11) 99999-8888"
+              required
+            />
+            {phoneTouched && !phoneValid && (
+              <p className="text-xs text-destructive">Telefone inválido — use DDD + número.</p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
             <Label htmlFor="renewalDate">Data de vencimento</Label>
             <Input
               id="renewalDate"
@@ -135,7 +186,10 @@ export function CreateAccountModal({ open, onClose, onCreated }: Props) {
             <Button type="button" variant="outline" onClick={handleClose} disabled={saving}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={saving || !email || !accountName}>
+            <Button
+              type="submit"
+              disabled={saving || !email || !accountName || !documentValid || !phoneValid}
+            >
               {saving ? 'Criando...' : 'Criar e Convidar'}
             </Button>
           </DialogFooter>

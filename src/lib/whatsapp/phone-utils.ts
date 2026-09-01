@@ -95,6 +95,28 @@ export function phoneVariants(sanitized: string): string[] {
 }
 
 /**
+ * Normalize a client contact phone number for storage: strips
+ * formatting, assumes Brazil (+55) when the number looks like a
+ * bare domestic number (10-11 digits, no country code), then
+ * validates the result as E.164-ish.
+ *
+ * Returns the normalized digits-only string (with country code),
+ * or null if the input doesn't look like a valid phone number.
+ * This is distinct from `sanitizePhoneForMeta`/`isValidE164` above,
+ * which assume the country code is already present — this one is
+ * for admin-entered contact numbers where a bare 11-digit BR
+ * number is the common case.
+ */
+export function normalizePhoneWithCountryCode(phone: string): string | null {
+  const digits = phone.replace(/\D/g, '')
+  if (!digits) return null
+
+  const withCountryCode = digits.length === 10 || digits.length === 11 ? `55${digits}` : digits
+
+  return isValidE164(withCountryCode) ? withCountryCode : null
+}
+
+/**
  * Returns true when the Meta API error indicates the recipient
  * phone number isn't in the allowed list (sandbox restriction).
  * Detected via error code 131030 or the standard error text.

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { requirePlatformAdmin } from '@/lib/superadmin/auth'
+import { SuperAdminNav } from '@/components/superadmin/superadmin-nav'
 
 export default async function SuperAdminLayout({
   children,
@@ -19,7 +20,10 @@ export default async function SuperAdminLayout({
           Super Admin
         </span>
       </div>
-      <div className="p-6">{children}</div>
+      <div className="flex">
+        <SuperAdminNav />
+        <div className="flex-1 p-6">{children}</div>
+      </div>
     </div>
   )
 }

@@ -3,6 +3,7 @@ import {
   isRecipientNotAllowedError,
   isValidE164,
   normalizePhone,
+  normalizePhoneWithCountryCode,
   phoneVariants,
   phonesMatch,
   sanitizePhoneForMeta,
@@ -160,5 +161,35 @@ describe("isRecipientNotAllowedError", () => {
       false,
     );
     expect(isRecipientNotAllowedError("")).toBe(false);
+  });
+});
+
+describe("normalizePhoneWithCountryCode", () => {
+  it("prepends 55 to a bare 11-digit BR number (with 9th digit)", () => {
+    expect(normalizePhoneWithCountryCode("11999998888")).toBe("5511999998888");
+  });
+
+  it("prepends 55 to a bare 10-digit BR number (landline-style)", () => {
+    expect(normalizePhoneWithCountryCode("1133334444")).toBe("551133334444");
+  });
+
+  it("strips formatting before normalizing", () => {
+    expect(normalizePhoneWithCountryCode("(11) 99999-8888")).toBe(
+      "5511999998888",
+    );
+  });
+
+  it("leaves a number that already has a country code untouched", () => {
+    expect(normalizePhoneWithCountryCode("5511999998888")).toBe(
+      "5511999998888",
+    );
+  });
+
+  it("returns null for empty input", () => {
+    expect(normalizePhoneWithCountryCode("")).toBeNull();
+  });
+
+  it("returns null for a number too short to be valid", () => {
+    expect(normalizePhoneWithCountryCode("123")).toBeNull();
   });
 });

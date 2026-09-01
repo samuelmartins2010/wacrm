@@ -4,6 +4,8 @@
 import { NextResponse } from 'next/server'
 import { requirePlatformAdmin, toErrorResponse } from '@/lib/superadmin/auth'
 import { logAdminAction } from '@/lib/superadmin/audit'
+import { validateDocument, normalizeDocument } from '@/lib/documents/br-document'
+import { normalizePhoneWithCountryCode } from '@/lib/whatsapp/phone-utils'
 
 export async function GET() {
   try {
@@ -21,6 +23,8 @@ export async function GET() {
         renewal_date,
         notes,
         suspended_at,
+        document,
+        phone,
         created_at,
         profiles!inner ( email, full_name )
       `)
@@ -49,12 +53,16 @@ export async function POST(request: Request) {
       accountName?: unknown
       plan?: unknown
       renewalDate?: unknown
+      document?: unknown
+      phone?: unknown
     } | null
 
     const email = typeof body?.email === 'string' ? body.email.trim() : null
     const accountName = typeof body?.accountName === 'string' ? body.accountName.trim() : null
     const plan = body?.plan === 'pro' ? 'pro' : 'basic'
     const renewalDate = typeof body?.renewalDate === 'string' ? body.renewalDate : null
+    const rawDocument = typeof body?.document === 'string' ? body.document : ''
+    const rawPhone = typeof body?.phone === 'string' ? body.phone : ''
 
     if (!email || !accountName) {
       return NextResponse.json(
@@ -62,6 +70,26 @@ export async function POST(request: Request) {
         { status: 400 },
       )
     }
+
+    // Required for every NEW account (existing legacy accounts are
+    // intentionally left without these — see migration 039).
+    const documentType = validateDocument(rawDocument)
+    if (!documentType) {
+      return NextResponse.json(
+        { error: 'CPF/CNPJ é obrigatório e precisa ser um documento válido' },
+        { status: 400 },
+      )
+    }
+
+    const normalizedPhone = normalizePhoneWithCountryCode(rawPhone)
+    if (!normalizedPhone) {
+      return NextResponse.json(
+        { error: 'Telefone é obrigatório e precisa ser um número válido' },
+        { status: 400 },
+      )
+    }
+
+    const document = normalizeDocument(rawDocument)
 
     // 1. Invite user — Supabase sends the email and the handle_new_user
     //    trigger auto-creates their account row synchronously.
@@ -100,6 +128,8 @@ export async function POST(request: Request) {
       name: accountName,
       plan,
       status: 'trial',
+      document,
+      phone: normalizedPhone,
     }
     if (renewalDate) updatePayload.renewal_date = renewalDate
 
@@ -120,7 +150,7 @@ export async function POST(request: Request) {
         action: 'account.create',
         targetType: 'account',
         targetId: account.id,
-        metadata: { invitedEmail: email, accountName, plan },
+        metadata: { invitedEmail: email, accountName, plan, documentType },
       },
     )
 
