@@ -93,11 +93,18 @@ export async function POST(request: Request) {
 
     // 1. Invite user — Supabase sends the email and the handle_new_user
     //    trigger auto-creates their account row synchronously.
+    // IMPORTANT: this goes through /auth/callback, not directly to
+    // /onboarding. /onboarding is a Server Component that checks for
+    // an existing session — Supabase's invite link needs its `?code=`
+    // exchanged for a session first (that's what /auth/callback does,
+    // already used for OAuth login and password reset). Pointing
+    // straight at /onboarding skipped that exchange entirely, so the
+    // invited user always landed on /login instead. See CHANGELOG.
     const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(
       email,
       {
         data: { full_name: accountName },
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/onboarding`,
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/auth/callback?next=/onboarding`,
       },
     )
 

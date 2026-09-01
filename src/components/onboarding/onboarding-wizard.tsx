@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
+import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,7 +15,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-type Step = 1 | 2 | 3
+type Step = 0 | 1 | 2 | 3
+
+const MIN_PASSWORD = 8
 
 const SEGMENTS = [
   { value: 'clinic', label: 'Clínica Odontológica' },
@@ -26,8 +29,18 @@ const SEGMENTS = [
 export function OnboardingWizard() {
   const router = useRouter()
   const { accountId } = useAuth()
+  const supabase = createClient()
 
-  const [step, setStep] = useState<Step>(1)
+  // Step 0 exists because the invite link only establishes a session —
+  // Supabase never gives an invited user a usable password. Without
+  // this step, the account is created but the client can never log in
+  // again after this one magic-link session expires. See CHANGELOG /
+  // project notes: this was broken (skipped entirely) before.
+  const [step, setStep] = useState<Step>(0)
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [settingPassword, setSettingPassword] = useState(false)
   const [businessName, setBusinessName] = useState('')
   const [segment, setSegment] = useState('')
   const [phoneNumberId, setPhoneNumberId] = useState('')
@@ -35,6 +48,88 @@ export function OnboardingWizard() {
   const [accessToken, setAccessToken] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  const handleSetPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (password.length < MIN_PASSWORD) {
+      setPasswordError(`A senha precisa ter pelo menos ${MIN_PASSWORD} caracteres.`)
+      return
+    }
+    if (password !== confirmPassword) {
+      setPasswordError('As senhas não coincidem.')
+      return
+    }
+    setPasswordError(null)
+    setSettingPassword(true)
+    try {
+      const { error } = await supabase.auth.updateUser({ password })
+      if (error) {
+        setPasswordError(error.message)
+        return
+      }
+      setStep(1)
+    } finally {
+      setSettingPassword(false)
+    }
+  }
+
+  if (step === 0) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-6">
+        <form onSubmit={handleSetPassword} className="w-full max-w-md space-y-6">
+          <div>
+            <h1 className="text-2xl font-bold">Defina sua senha</h1>
+            <p className="text-muted-foreground mt-1 text-sm">
+              Antes de continuar, crie uma senha para acessar sua conta.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="onboarding-password">Nova senha</Label>
+              <Input
+                id="onboarding-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+                minLength={MIN_PASSWORD}
+                disabled={settingPassword}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="onboarding-confirm-password">Confirmar senha</Label>
+              <Input
+                id="onboarding-confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
+                minLength={MIN_PASSWORD}
+                disabled={settingPassword}
+                required
+              />
+            </div>
+
+            {passwordError && (
+              <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {passwordError}
+              </p>
+            )}
+          </div>
+
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={settingPassword || !password || !confirmPassword}
+          >
+            {settingPassword ? 'Salvando...' : 'Continuar →'}
+          </Button>
+        </form>
+      </div>
+    )
+  }
 
   const handleSaveAndFinish = async () => {
     if (!accountId) return
