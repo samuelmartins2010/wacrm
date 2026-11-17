@@ -18,6 +18,21 @@ Modelo de entrada:
 
 ---
 
+## 2026-11-17: Reativação: SAIR sem resposta dupla, trava da inscrição e .env do Mac
+- **Origem:** relatório de verificação (SAIR recebia confirmação + resposta da automação/I.A; trava da inscrição contava do início da rodada) e pedido do Samuel de separar as chaves de produção do Mac.
+- **O que mudou:**
+  - `b171107`: **SAIR recebe só a confirmação.** `handleReactivationInbound` devolve `{ outcome, consumed }`; quando trata um pedido de saída (`consumed`), o webhook não chama fluxos, nenhum gatilho de automação (nem `first_inbound_message`/`new_contact_created`) e nem a I.A para essa mensagem. A mensagem continua no inbox e o `message.received` continua indo para os webhooks externos. Resposta comum ("oi") e reação ficam como estavam. As regras estão em `src/lib/whatsapp/inbound-plan.ts` (testadas).
+  - `92b1e3a`: **trava da inscrição conta do momento do claim** (início da rodada + tempo já decorrido), não do início da rodada: travada aos 7:59 de rodada → válida até ~17:59.
+- **Como foi testado:** webhook assinado com saída externa bloqueada (proxy inexistente). Cenário A (automação `new_message_received` + I.A) e B (só I.A): SAIR → 1 mensagem (a confirmação), sem tentativa de automação/I.A, `message.received` disparado; "oi" → automação (A) / I.A (B) tentam responder normalmente; reação → nada além da inscrição. Antes: SAIR gerava 2 respostas.
+- **Testes:** 837/837 no vitest + 33 asserts em pgTAP; typecheck e build ok.
+- **Esquema de .env no Mac (desde 17/11/2026):**
+  - `~/Developer/wacrm/.env.development.local` → `npm run dev` (Supabase local, segredos de dev, `REACTIVATION_DRY_RUN=true`).
+  - `~/Developer/wacrm/.env.production.local` → `npm run build` / `npm start` no Mac, **cópia do de dev** (também banco local). O build mostra `Environments: .env.production.local` e não contém nenhuma referência ao projeto da nuvem.
+  - **Não existe mais `.env.local` no repo.** As chaves de produção foram movidas (não apagadas) para `~/Developer/wacrm-secrets/env.production.backup` (fora do repo, permissão 600). Todos os `.env*` são ignorados pelo git (exceto os `*.example`).
+  - `~/Developer/wacrm-final` não tem nenhum `.env` com chaves (só os `.example`).
+- **Commit/branch:** `feat/reativacao`, PR #1 aberto.
+- **Pendências / riscos:** as do registro anterior continuam (timeout ambíguo da Meta, crash entre a Meta aceitar e o banco gravar, gancho do webhook que falha só gera log). Chamadas ao Supabase continuam sem timeout: se o banco travar mais de ~7 min, a trava da rodada (15 min) pode vencer com a rodada ainda trabalhando.
+
 ## 2026-11-17: Reativação: correções da verificação
 - **Origem:** relatório de verificação do módulo (anti-objetivos, concorrência, fuso, RLS, envio real) e decisões de produto do Samuel.
 - **Decisões de produto:**
@@ -44,7 +59,7 @@ Modelo de entrada:
 - **Banco (migrations):** `043_reactivation_send_error_code.sql`, `044_contacts_do_not_contact_guard.sql`, `045_reactivation_run_lock.sql`, `046_reactivation_one_open_per_contact.sql`, `047_reactivation_campaign_rls_draft_only.sql`.
 - **Testes:** 827/827 no vitest (`TZ=UTC LC_ALL=en_US.UTF-8 npx vitest run`) + 33 asserts em pgTAP (`npx supabase test db`, pasta `supabase/tests/`). Typecheck e build ok.
 - **Como testar (local):** igual à entrada abaixo. As respostas foram testadas pelo webhook real e assinado (texto, "Sair.", reação 👍, status `failed` 131026), com um `whatsapp_config` temporário.
-- **Commit/branch:** branch `feat/reativacao`, PR #1 aberto (https://github.com/samuelmartins2010/wacrm/pull/1). Estes 9 commits ainda não foram enviados ao GitHub (sem push, aguardando o Samuel).
+- **Commit/branch:** branch `feat/reativacao`, PR #1 aberto (https://github.com/samuelmartins2010/wacrm/pull/1). Enviados ao GitHub em 17/11/2026 (head `dda796f`).
 - **Pendências / riscos:**
   - Timeout de 15 s na Meta: se a Meta aceitar o envio mas responder devagar, o toque conta como falha temporária e pode ser reenviado no dia seguinte (duplicata rara).
   - Crash entre a Meta aceitar e o banco gravar ainda pode reenviar o toque (raro).
@@ -83,7 +98,7 @@ Modelo de entrada:
 ## 2026-11-17: Ambiente de desenvolvimento local
 - **O que mudou:** dev 100% local. Docker via Colima, Supabase via `npx supabase`, `.env.development.local` apontando pro Supabase local. Produção (VPS + Supabase cloud) continua pausada de propósito.
 - **Como subir:** `colima start --cpu 4 --memory 4` → `npx supabase start -x vector,logflare,imgproxy,supavisor,edge-runtime` → `npm run dev` → http://localhost:3000 (login de teste: ver anotações locais, não versionado).
-- **Arquivos:** `supabase/config.toml` (não commitado), `.env.development.local` (ignorado pelo git).
+- **Arquivos:** `supabase/config.toml` (não commitado), `.env.development.local` e `.env.production.local` (ignorados pelo git; ver o esquema de .env na entrada mais recente).
 - **Pasta de trabalho:** desde 17/11/2026, `~/Developer/wacrm` (clone novo; a pasta antiga em `~/Documents` ficou intacta). Supabase local com as migrations até a 047.
 - **Atenção:** a migration 038 do `main` (RBAC do superadmin) não cadastra nenhum admin; sem uma linha em `platform_admins`, `/superadmin` redireciona para `/dashboard` (local e produção).
 - **Pendências / riscos:** WhatsApp real não funciona local sem túnel (ngrok/cloudflared).
