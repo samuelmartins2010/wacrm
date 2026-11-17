@@ -6,6 +6,12 @@ import { normalizePhone } from '@/lib/whatsapp/phone-utils'
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
+import { engineSendText } from '@/lib/automations/meta-send'
+import {
+  handleReactivationInbound,
+  mirrorReactivationStatus,
+  supabaseInboundStore,
+} from '@/lib/reactivation/inbound'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
@@ -408,6 +414,13 @@ async function handleStatusUpdate(status: {
     }
   }
 
+  // 2b) Mirror onto reactivation_sends (best-effort).
+  try {
+    await mirrorReactivationStatus(supabaseInboundStore(supabaseAdmin()), status.id, status.status)
+  } catch (err) {
+    console.error('mirrorReactivationStatus failed:', err)
+  }
+
   // 3) Webhook fan-out for messages we store (inbox / API sends).
   //    Runs last so a slow subscriber can't delay the mirrors above.
   //    Bounded to one row (message_id isn't unique) purely to resolve
@@ -706,6 +719,25 @@ async function processMessage(
   // so the broadcast's `replied_count` advances (via the aggregate
   // trigger installed in migration 003).
   await flagBroadcastReplyIfAny(accountId, contactRecord.id)
+
+  // Reativação: atualiza last_inbound_at, trata SAIR e encerra a
+  // sequência de quem respondeu. Best-effort, como o flag acima.
+  try {
+    await handleReactivationInbound(
+      supabaseInboundStore(supabaseAdmin()),
+      {
+        accountId,
+        contactId: contactRecord.id,
+        conversationId: conversation.id,
+        text: contentText ?? null,
+        configOwnerUserId,
+        now: new Date(),
+      },
+      { sendText: engineSendText, dryRun: process.env.REACTIVATION_DRY_RUN === 'true' },
+    )
+  } catch (err) {
+    console.error('handleReactivationInbound failed:', err)
+  }
 
   // ============================================================
   // Flow runner dispatch.
