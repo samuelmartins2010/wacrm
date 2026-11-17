@@ -96,7 +96,7 @@ describe('handleReactivationInbound', () => {
     const s = new Mem()
     s.enrollments = [enrollment()]
     const d = deps()
-    expect(await handleReactivationInbound(s, input('Sair'), d)).toBe('opted_out')
+    expect(await handleReactivationInbound(s, input('Sair'), d)).toEqual({ outcome: 'opted_out', consumed: true })
     expect(s.doNotContact).toBe(true)
     expect(s.enrollments[0]).toMatchObject({ status: 'opted_out', ended_at: NOW.toISOString() })
     expect(d.sendText).toHaveBeenCalledWith(
@@ -110,14 +110,14 @@ describe('handleReactivationInbound', () => {
   it('opts out with a recent send even without an open enrollment', async () => {
     const s = new Mem()
     s.recentSend = true
-    expect(await handleReactivationInbound(s, input('PARAR'), deps())).toBe('opted_out')
+    expect(await handleReactivationInbound(s, input('PARAR'), deps())).toEqual({ outcome: 'opted_out', consumed: true })
     expect(s.doNotContact).toBe(true)
   })
 
   it('ignores optout without recent reactivation', async () => {
     const s = new Mem()
     const d = deps()
-    expect(await handleReactivationInbound(s, input('SAIR'), d)).toBe('none')
+    expect(await handleReactivationInbound(s, input('SAIR'), d)).toEqual({ outcome: 'none', consumed: false })
     expect(s.doNotContact).toBe(false)
     expect(d.sendText).not.toHaveBeenCalled()
   })
@@ -125,7 +125,7 @@ describe('handleReactivationInbound', () => {
   it('marks a reply on a sent step', async () => {
     const s = new Mem()
     s.enrollments = [enrollment({ current_step: 2 })]
-    expect(await handleReactivationInbound(s, input('oi'), deps())).toBe('replied')
+    expect(await handleReactivationInbound(s, input('oi'), deps())).toEqual({ outcome: 'replied', consumed: false })
     expect(s.enrollments[0]).toMatchObject({
       status: 'replied',
       replied_step: 2,
@@ -137,14 +137,14 @@ describe('handleReactivationInbound', () => {
   it('cancels when the contact writes before the first touch', async () => {
     const s = new Mem()
     s.enrollments = [enrollment({ status: 'pending', current_step: 0 })]
-    expect(await handleReactivationInbound(s, input('oi'), deps())).toBe('none')
+    expect(await handleReactivationInbound(s, input('oi'), deps())).toEqual({ outcome: 'none', consumed: false })
     expect(s.enrollments[0]).toMatchObject({ status: 'cancelled', end_reason: 'returned_before_send' })
   })
 
   it('treats non-text messages as replies', async () => {
     const s = new Mem()
     s.enrollments = [enrollment()]
-    expect(await handleReactivationInbound(s, input(null), deps())).toBe('replied')
+    expect(await handleReactivationInbound(s, input(null), deps())).toEqual({ outcome: 'replied', consumed: false })
   })
 
   it('always updates last_inbound_at', async () => {

@@ -46,11 +46,21 @@ export interface InboundDeps {
   dryRun: boolean
 }
 
+/**
+ * `consumed: true` means this inbound was an opt-out the Reativação
+ * already answered: the webhook must not run flows, automations or the
+ * AI for it (the customer gets only the confirmation).
+ */
+export interface InboundResult {
+  outcome: 'opted_out' | 'replied' | 'none'
+  consumed: boolean
+}
+
 export async function handleReactivationInbound(
   store: InboundStore,
   input: InboundInput,
   deps: InboundDeps,
-): Promise<'opted_out' | 'replied' | 'none'> {
+): Promise<InboundResult> {
   const nowIso = input.now.toISOString()
   await store.touchLastInbound(input.contactId, nowIso)
 
@@ -87,7 +97,7 @@ export async function handleReactivationInbound(
             text: settings.optout_reply,
           })
         }
-        return 'opted_out'
+        return { outcome: 'opted_out', consumed: true }
       }
     }
   }
@@ -114,7 +124,7 @@ export async function handleReactivationInbound(
       })
     }
   }
-  return replied ? 'replied' : 'none'
+  return { outcome: replied ? 'replied' : 'none', consumed: false }
 }
 
 /**
