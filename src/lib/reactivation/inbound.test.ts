@@ -3,6 +3,7 @@ import type { ReactivationEnrollment, ReactivationSend } from '@/types'
 import { DEFAULT_SETTINGS } from './queries'
 import {
   handleReactivationInbound,
+  handleReactivationReaction,
   mirrorReactivationStatus,
   type InboundInput,
   type InboundStore,
@@ -274,5 +275,55 @@ describe('async failure from the status webhook', () => {
     const s = scenario({}, { status: 'replied', next_run_at: null })
     await mirrorReactivationStatus(s, 'wamid.1', 'failed', UNDELIVERABLE, NOW)
     expect(s.enrollments[0].status).toBe('replied')
+  })
+})
+
+describe('reaction to a reactivation touch (D1)', () => {
+  function withTouch(enrOver: Partial<ReactivationEnrollment> = {}) {
+    const s = new Mem()
+    s.enrollments = [enrollment({ current_step: 1, ...enrOver })]
+    s.sends = [
+      {
+        id: 's1', account_id: 'acc', enrollment_id: 'e1', step: 1, attempts: 1,
+        whatsapp_message_id: 'wamid.touch1', message_id: null, status: 'delivered',
+        error: null, created_at: '', updated_at: '',
+      },
+    ]
+    return s
+  }
+
+  it('an emoji on a touch marks the enrollment replied and cancels the next touches', async () => {
+    const s = withTouch()
+    expect(await handleReactivationReaction(s, 'wamid.touch1', '👍', NOW)).toBe('replied')
+    expect(s.enrollments[0]).toMatchObject({
+      status: 'replied',
+      replied_step: 1,
+      replied_at: NOW.toISOString(),
+      next_run_at: null,
+    })
+  })
+
+  it('removing a reaction (empty emoji) does nothing', async () => {
+    const s = withTouch()
+    expect(await handleReactivationReaction(s, 'wamid.touch1', '', NOW)).toBe('none')
+    expect(s.enrollments[0].status).toBe('active')
+  })
+
+  it('a reaction to a message that is not a touch does nothing', async () => {
+    const s = withTouch()
+    expect(await handleReactivationReaction(s, 'wamid.other', '❤️', NOW)).toBe('none')
+    expect(s.enrollments[0].status).toBe('active')
+  })
+
+  it('does not reopen or overwrite a closed enrollment', async () => {
+    const s = withTouch({ status: 'opted_out', next_run_at: null })
+    expect(await handleReactivationReaction(s, 'wamid.touch1', '👍', NOW)).toBe('none')
+    expect(s.enrollments[0].status).toBe('opted_out')
+  })
+
+  it('does not touch last_inbound_at (a reaction is not a message)', async () => {
+    const s = withTouch()
+    await handleReactivationReaction(s, 'wamid.touch1', '👍', NOW)
+    expect(s.lastInbound).toBeNull()
   })
 })

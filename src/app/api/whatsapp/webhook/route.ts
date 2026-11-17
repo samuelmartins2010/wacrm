@@ -9,6 +9,7 @@ import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { engineSendText } from '@/lib/automations/meta-send'
 import {
   handleReactivationInbound,
+  handleReactivationReaction,
   mirrorReactivationStatus,
   supabaseInboundStore,
 } from '@/lib/reactivation/inbound'
@@ -635,6 +636,20 @@ async function processMessage(
   // Done before parseMessageContent so the media-URL fetch is skipped.
   if (message.type === 'reaction') {
     await handleReaction(message, conversation.id, contactRecord.id)
+    // Reativação (D1): reação a um toque conta como resposta. Só mexe na
+    // inscrição; continua saindo antes de fluxos, automações e I.A.
+    if (message.reaction?.message_id) {
+      try {
+        await handleReactivationReaction(
+          supabaseInboundStore(supabaseAdmin()),
+          message.reaction.message_id,
+          message.reaction.emoji,
+          new Date(),
+        )
+      } catch (err) {
+        console.error('handleReactivationReaction failed:', err)
+      }
+    }
     return
   }
 

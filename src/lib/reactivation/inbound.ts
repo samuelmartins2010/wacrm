@@ -117,6 +117,40 @@ export async function handleReactivationInbound(
   return replied ? 'replied' : 'none'
 }
 
+/**
+ * Decisão D1: uma reação (emoji) a um toque da reativação conta como
+ * resposta — a inscrição vira replied e os próximos toques são
+ * cancelados. Remover a reação (emoji vazio) não faz nada. Não mexe em
+ * last_inbound_at: reação não é mensagem.
+ */
+export async function handleReactivationReaction(
+  store: InboundStore,
+  reactedWamid: string,
+  emoji: string | null | undefined,
+  now: Date,
+): Promise<'replied' | 'none'> {
+  if (!emoji) return 'none'
+  const send = await store.getSendByWamid(reactedWamid)
+  if (!send) return 'none'
+  const e = await store.getEnrollment(send.enrollment_id)
+  if (!e || (e.status !== 'pending' && e.status !== 'active')) return 'none'
+  const nowIso = now.toISOString()
+  const applied = await store.updateEnrollment(
+    e.id,
+    {
+      status: 'replied',
+      replied_at: nowIso,
+      replied_step: Math.max(e.current_step, send.step),
+      ended_at: nowIso,
+      end_reason: 'reaction',
+      next_run_at: null,
+      updated_at: nowIso,
+    },
+    true,
+  )
+  return applied === false ? 'none' : 'replied'
+}
+
 const RANK: Record<ReactivationSendStatus, number> = { failed: 0, sent: 1, delivered: 2, read: 3 }
 
 export async function mirrorReactivationStatus(
@@ -231,7 +265,8 @@ export function supabaseInboundStore(db: SupabaseClient): InboundStore {
     async updateEnrollment(id, patch, onlyOpen = false) {
       let q = db.from('reactivation_enrollments').update(patch).eq('id', id)
       if (onlyOpen) q = q.in('status', ['pending', 'active'])
-      await q
+      const { data } = await q.select('id')
+      return (data ?? []).length > 0
     },
     async getEnrollment(id) {
       const { data } = await db.from('reactivation_enrollments').select('*').eq('id', id).maybeSingle()
