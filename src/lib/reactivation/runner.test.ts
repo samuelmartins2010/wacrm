@@ -128,12 +128,18 @@ class MemStore implements RunnerStore {
   async refresh(id: string) {
     const e = this.enrollments.get(id)
     if (!e) return null
-    return { enrollment: { ...e }, contact: { ...this.contacts.get(e.contact_id)! } }
+    return {
+      enrollment: { ...e },
+      contact: { ...this.contacts.get(e.contact_id)! },
+      campaignStatus: this.campaigns.get(e.campaign_id)!.status,
+    }
   }
   async getSend(enrollmentId: string, step: number) {
     return this.sends.find((s) => s.enrollment_id === enrollmentId && s.step === step) ?? null
   }
+  failAttemptFor = new Set<string>()
   async recordAttempt(accountId: string, enrollmentId: string, step: number, nowIso: string) {
+    if (this.failAttemptFor.has(enrollmentId)) return null
     let s = await this.getSend(enrollmentId, step)
     if (!s) {
       s = {
@@ -458,5 +464,28 @@ describe('runReactivation', () => {
     await runReactivation(deps, NOW)
     const args = (send.mock.calls[0] as unknown as [{ timeoutMs?: number }])[0]
     expect(args.timeoutMs).toBe(15_000)
+  })
+
+  it('9a: pausing the campaign after loadDue stops the send right away', async () => {
+    const { store, send, deps } = setup()
+    store.addEnrollment('e1')
+    const stale = await store.loadDue(NOW, 50)
+    store.campaigns.get('camp')!.status = 'paused'
+    store.loadDue = async () => stale
+    await runReactivation(deps, NOW)
+    expect(send).not.toHaveBeenCalled()
+    expect(store.sends).toHaveLength(0)
+  })
+
+  it('9b: a lost race on the attempt row skips that item instead of aborting the run', async () => {
+    const { store, send, deps } = setup()
+    store.addEnrollment('e1')
+    store.addEnrollment('e2')
+    store.failAttemptFor.add('e1')
+    const r = await runReactivation(deps, NOW)
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(r.sent).toBe(1)
+    expect(r.skipped).toBe(1)
+    expect(store.campaigns.get('camp')!.status).toBe('active')
   })
 })

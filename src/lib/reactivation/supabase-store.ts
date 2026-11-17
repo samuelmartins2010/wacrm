@@ -67,13 +67,18 @@ export function supabaseRunnerStore(db: SupabaseClient): RunnerStore {
     async refresh(enrollmentId) {
       const { data, error } = await db
         .from('reactivation_enrollments')
-        .select('*, contact:contacts!inner(id, name, phone, company, do_not_contact, last_inbound_at)')
+        .select(
+          '*, contact:contacts!inner(id, name, phone, company, do_not_contact, last_inbound_at), campaign:reactivation_campaigns!inner(status)',
+        )
         .eq('id', enrollmentId)
         .maybeSingle()
       check(error, 'refresh')
       if (!data) return null
-      const { contact, ...enrollment } = data as ReactivationEnrollment & { contact: RunnerContact }
-      return { enrollment, contact }
+      const { contact, campaign, ...enrollment } = data as ReactivationEnrollment & {
+        contact: RunnerContact
+        campaign: { status: ReactivationCampaign['status'] }
+      }
+      return { enrollment, contact, campaignStatus: campaign.status }
     },
 
     async getSend(enrollmentId, step) {
@@ -90,17 +95,18 @@ export function supabaseRunnerStore(db: SupabaseClient): RunnerStore {
     async recordAttempt(accountId, enrollmentId, step, nowIso) {
       const existing = await this.getSend(enrollmentId, step)
       if (existing) {
+        // Conditional on the attempts we read: 0 rows = another run got here first.
         const { data, error } = await db
           .from('reactivation_sends')
           .update({ attempts: existing.attempts + 1, attempted_at: nowIso, updated_at: nowIso })
           .eq('id', existing.id)
           .eq('attempts', existing.attempts)
           .select('*')
-          .single()
+          .maybeSingle()
         check(error, 'recordAttempt(update)')
-        return data as ReactivationSend
+        return (data as ReactivationSend | null) ?? null
       }
-      // UNIQUE(enrollment_id, step) rejects a concurrent duplicate.
+      // UNIQUE(enrollment_id, step) rejects a concurrent duplicate → null.
       const { data, error } = await db
         .from('reactivation_sends')
         .insert({
@@ -116,6 +122,7 @@ export function supabaseRunnerStore(db: SupabaseClient): RunnerStore {
         })
         .select('*')
         .single()
+      if (error?.code === '23505') return null
       check(error, 'recordAttempt(insert)')
       return data as ReactivationSend
     },

@@ -48,10 +48,21 @@ export interface RunnerStore {
   /** With onlyOpen, applies only while status is pending/active; returns whether it applied. */
   updateEnrollment(id: string, patch: Partial<ReactivationEnrollment>, onlyOpen?: boolean): Promise<boolean>
   /** Fresh enrollment + contact state (after the claim). */
-  refresh(enrollmentId: string): Promise<{ enrollment: ReactivationEnrollment; contact: RunnerContact } | null>
+  refresh(
+    enrollmentId: string,
+  ): Promise<{
+    enrollment: ReactivationEnrollment
+    contact: RunnerContact
+    campaignStatus: ReactivationCampaign['status']
+  } | null>
   getSend(enrollmentId: string, step: number): Promise<ReactivationSend | null>
-  /** Upsert the (enrollment, step) row and increment attempts. */
-  recordAttempt(accountId: string, enrollmentId: string, step: number, nowIso: string): Promise<ReactivationSend>
+  /** Upsert the (enrollment, step) row and increment attempts; null if another run raced us. */
+  recordAttempt(
+    accountId: string,
+    enrollmentId: string,
+    step: number,
+    nowIso: string,
+  ): Promise<ReactivationSend | null>
   updateSend(id: string, patch: Partial<ReactivationSend>): Promise<void>
   latestConversationId(contactId: string): Promise<string | null>
   getTemplate(id: string): Promise<MessageTemplate | null>
@@ -159,6 +170,11 @@ async function runLocked(deps: RunnerDeps, now: Date): Promise<RunResult> {
       result.skipped++
       continue
     }
+    // Pause/finish take effect immediately, even mid-batch.
+    if (fresh.campaignStatus !== 'active') {
+      result.skipped++
+      continue
+    }
     const contact = fresh.contact ?? staleContact
 
     // Every terminal/advancing write only applies while the enrollment is
@@ -238,6 +254,10 @@ async function runLocked(deps: RunnerDeps, now: Date): Promise<RunResult> {
     }
 
     const attempt = await store.recordAttempt(accountId, e.id, stepNo, nowIso)
+    if (!attempt) {
+      result.skipped++
+      continue
+    }
     sentToday.set(accountId, sentToday.get(accountId)! + 1)
 
     // Only the Meta call decides success/failure. Bookkeeping after a
