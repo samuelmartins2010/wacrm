@@ -12,6 +12,7 @@ import {
   nextDayWindowOpen,
   nextWindowOpen,
   normalizeOptout,
+  startOfLocalDay,
   type EligibilityInput,
 } from './rules'
 
@@ -175,6 +176,14 @@ describe('nextDayWindowOpen', () => {
   it('from friday goes to saturday 09:00', () => {
     expect(nextDayWindowOpen(new Date('2026-11-20T13:00:00Z'), WINDOW).toISOString()).toBe(
       '2026-11-21T12:00:00.000Z',
+    )
+  })
+})
+
+describe('startOfLocalDay', () => {
+  it('is midnight in Sao Paulo', () => {
+    expect(startOfLocalDay(new Date('2026-11-18T02:00:00Z')).toISOString()).toBe(
+      '2026-11-17T03:00:00.000Z',
     )
   })
 })

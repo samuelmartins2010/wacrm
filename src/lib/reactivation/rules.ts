@@ -145,11 +145,15 @@ export function nextWindowOpen(now: Date, w: SendWindow): Date {
   return addDays(now, 1)
 }
 
+/** Midnight of the current São Paulo calendar day. */
+export function startOfLocalDay(now: Date): Date {
+  const lp = localParts(now)
+  return localToInstant(lp.year, lp.month, lp.day, 0)
+}
+
 /** Opening of the next São Paulo day's window (used when the daily limit is hit). */
 export function nextDayWindowOpen(now: Date, w: SendWindow): Date {
-  const lp = localParts(now)
-  const tomorrowMidnight = localToInstant(lp.year, lp.month, lp.day, 0)
-  return nextWindowOpen(addDays(tomorrowMidnight, 1), w)
+  return nextWindowOpen(addDays(startOfLocalDay(now), 1), w)
 }
 
 export function normalizeOptout(text: string): string {
