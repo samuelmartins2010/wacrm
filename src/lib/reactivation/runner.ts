@@ -60,6 +60,9 @@ export interface RunnerStore {
   findMessageId(conversationId: string, wamid: string): Promise<string | null>
   pauseCampaign(id: string, reason: string): Promise<void>
   finishIdleCampaigns(nowIso: string): Promise<number>
+  /** One run at a time: false when another run holds an unexpired lock. */
+  acquireRunLock(holder: string, ttlSeconds: number): Promise<boolean>
+  releaseRunLock(holder: string): Promise<void>
 }
 
 export interface RunnerDeps {
@@ -74,15 +77,36 @@ export interface RunResult {
   skipped: number
   failed: number
   deferred: number
+  /** True when another run held the lock and this one did nothing. */
+  locked?: boolean
 }
 
 const CLAIM_LEASE_MS = 10 * 60_000
+/** Meta call timeout — far below CLAIM_LEASE_MS, so a hung call can't outlive its claim. */
+export const SEND_TIMEOUT_MS = 15_000
+/** Stop picking new items after this long, so the run ends well inside RUN_LOCK_TTL. */
+const RUN_BUDGET_MS = 8 * 60_000
+/** Run lock lease; longer than RUN_BUDGET_MS + one in-flight send. */
+const RUN_LOCK_TTL_SECONDS = 15 * 60
 /** engineSendTemplate throws this after Meta already accepted the message. */
 const SENT_BUT_NOT_SAVED = /sent to Meta but DB insert failed/i
 
 export async function runReactivation(deps: RunnerDeps, now: Date): Promise<RunResult> {
+  const holder = randomUUID()
+  if (!(await deps.store.acquireRunLock(holder, RUN_LOCK_TTL_SECONDS))) {
+    return { sent: 0, skipped: 0, failed: 0, deferred: 0, locked: true }
+  }
+  try {
+    return await runLocked(deps, now)
+  } finally {
+    await deps.store.releaseRunLock(holder)
+  }
+}
+
+async function runLocked(deps: RunnerDeps, now: Date): Promise<RunResult> {
   const { store } = deps
   const nowIso = now.toISOString()
+  const startedAt = Date.now()
   const result: RunResult = { sent: 0, skipped: 0, failed: 0, deferred: 0 }
   const due = await store.loadDue(now, deps.batchSize ?? 50)
 
@@ -91,6 +115,7 @@ export async function runReactivation(deps: RunnerDeps, now: Date): Promise<RunR
   const pausedCampaigns = new Set<string>()
 
   for (const { enrollment: e, campaign, contact: staleContact } of due) {
+    if (Date.now() - startedAt > RUN_BUDGET_MS) break
     if (pausedCampaigns.has(campaign.id)) continue
     const accountId = e.account_id
     let settings = settingsCache.get(accountId)
@@ -232,6 +257,7 @@ export async function runReactivation(deps: RunnerDeps, now: Date): Promise<RunR
           templateName: template.name,
           language: template.language ?? 'pt_BR',
           params: resolveParams(step.params, contact),
+          timeoutMs: SEND_TIMEOUT_MS,
         })
         wamid = r.whatsapp_message_id
       }

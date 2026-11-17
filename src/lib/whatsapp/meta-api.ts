@@ -359,6 +359,8 @@ export interface SendTemplateMessageArgs {
   to: string
   templateName: string
   language?: string
+  /** Abort the Graph call after this many ms (no timeout when omitted). */
+  timeoutMs?: number
   /**
    * Legacy body-only params. Kept for backward compat with callers
    * that haven't migrated to the structured `template` + `messageParams`
@@ -408,6 +410,7 @@ export async function sendTemplateMessage(
     template,
     messageParams,
     contextMessageId,
+    timeoutMs,
   } = args
   const url = `${META_API_BASE}/${phoneNumberId}/messages`
 
@@ -451,6 +454,7 @@ export async function sendTemplateMessage(
   }
 
   const response = await fetch(url, {
+    signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

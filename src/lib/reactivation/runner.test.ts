@@ -176,6 +176,15 @@ class MemStore implements RunnerStore {
     c.status = 'paused'
     c.pause_reason = reason
   }
+  lockHolder: string | null = null
+  async acquireRunLock(holder: string) {
+    if (this.lockHolder && this.lockHolder !== holder) return false
+    this.lockHolder = holder
+    return true
+  }
+  async releaseRunLock(holder: string) {
+    if (this.lockHolder === holder) this.lockHolder = null
+  }
   async finishIdleCampaigns(nowIso: string) {
     let n = 0
     for (const c of this.campaigns.values()) {
@@ -416,5 +425,38 @@ describe('runReactivation', () => {
     await runReactivation(deps, NOW)
     expect(store.campaigns.get('camp')!.status).toBe('paused')
     expect(store.sends[0]).toMatchObject({ status: 'failed', error_code: 132016, error: 'Template is disabled' })
+  })
+
+  it('only one run at a time: concurrent runs respect the daily limit', async () => {
+    const { store, send, deps } = setup()
+    store.settings = { ...store.settings, daily_limit: 2 }
+    for (const id of ['e1', 'e2', 'e3', 'e4', 'e5']) store.addEnrollment(id)
+    // Slow Meta so the runs really overlap.
+    send.mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 5))
+      return { whatsapp_message_id: 'w' }
+    })
+    const results = await Promise.all([1, 2, 3, 4, 5].map(() => runReactivation(deps, NOW)))
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(results.filter((r) => r.locked).length).toBe(4)
+    expect(store.lockHolder).toBeNull()
+  })
+
+  it('releases the lock even when the run throws', async () => {
+    const { store, deps } = setup()
+    store.addEnrollment('e1')
+    store.getSettings = async () => {
+      throw new Error('db down')
+    }
+    await expect(runReactivation(deps, NOW)).rejects.toThrow('db down')
+    expect(store.lockHolder).toBeNull()
+  })
+
+  it('passes a Meta timeout shorter than the enrollment claim', async () => {
+    const { store, send, deps } = setup()
+    store.addEnrollment('e1')
+    await runReactivation(deps, NOW)
+    const args = (send.mock.calls[0] as unknown as [{ timeoutMs?: number }])[0]
+    expect(args.timeoutMs).toBe(15_000)
   })
 })

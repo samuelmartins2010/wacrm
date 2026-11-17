@@ -186,6 +186,20 @@ export function supabaseRunnerStore(db: SupabaseClient): RunnerStore {
       check(error, 'pauseCampaign')
     },
 
+    async acquireRunLock(holder, ttlSeconds) {
+      const { data, error } = await db.rpc('reactivation_try_lock', {
+        p_holder: holder,
+        p_ttl_seconds: ttlSeconds,
+      })
+      check(error, 'acquireRunLock')
+      return data === true
+    },
+
+    async releaseRunLock(holder) {
+      const { error } = await db.rpc('reactivation_release_lock', { p_holder: holder })
+      if (error) console.error('[reactivation] releaseRunLock:', error.message)
+    },
+
     async finishIdleCampaigns(nowIso) {
       const { data: active, error } = await db
         .from('reactivation_campaigns')

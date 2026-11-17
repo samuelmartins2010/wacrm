@@ -50,3 +50,22 @@ describe("Meta error envelope", () => {
     expect(err.message).toMatch(/502/);
   });
 });
+
+describe("sendTemplateMessage timeout", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("aborts when Meta does not answer within timeoutMs", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url: string, init?: RequestInit) =>
+          new Promise<Response>((_res, rej) => {
+            init?.signal?.addEventListener("abort", () => rej(init.signal!.reason));
+          }),
+      ),
+    );
+    const started = Date.now();
+    await expect(sendTemplateMessage({ ...ARGS, timeoutMs: 50 })).rejects.toThrow(/timeout|abort/i);
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+});
