@@ -3,6 +3,7 @@ import type { MessageTemplate, ReactivationSettings, ReactivationStep } from '@/
 import { addDays } from './rules'
 import {
   ReactivationError,
+  approveCampaign,
   assertDraft,
   buildCandidates,
   countBodyVariables,
@@ -176,5 +177,76 @@ describe('validateCampaignSteps', () => {
   it('rejects wait_days outside 1-30', () => {
     expect(validateCampaignSteps([step({ wait_days: 0 })], [tpl()])).toMatch(/1 e 30/)
     expect(validateCampaignSteps([step({ wait_days: 31 })], [tpl()])).toMatch(/1 e 30/)
+  })
+})
+
+// ------------------------------------------------------------
+// approveCampaign ordering (review finding: race with finishIdleCampaigns)
+// ------------------------------------------------------------
+
+type Op = { table: string; op: string; payload?: unknown }
+
+/** Thenable query builder that records writes and answers reads per table. */
+function recordingDb(answers: Record<string, unknown>, rpcRows: unknown[]) {
+  const ops: Op[] = []
+  const db = {
+    rpc: async () => ({ data: rpcRows, error: null }),
+    from(table: string) {
+      let op = 'select'
+      let payload: unknown
+      const result = () => {
+        if (op !== 'select') return { data: op === 'update' ? { id: 'x' } : null, error: null }
+        return { data: answers[table] ?? null, error: null }
+      }
+      const b: Record<string, unknown> = {}
+      for (const m of ['select', 'eq', 'in', 'order', 'limit']) b[m] = () => b
+      for (const m of ['insert', 'update', 'upsert', 'delete']) {
+        b[m] = (p: unknown) => {
+          op = m
+          payload = p
+          ops.push({ table, op: m, payload })
+          return b
+        }
+      }
+      b.maybeSingle = async () => result()
+      b.single = async () => result()
+      b.then = (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) => {
+        const r = result()
+        const data = op === 'select' && !Array.isArray(r.data) && r.data ? [r.data] : r.data
+        return Promise.resolve({ ...r, data }).then(res, rej)
+      }
+      return b
+    },
+  }
+  return { db: db as unknown as import('@supabase/supabase-js').SupabaseClient, ops }
+}
+
+describe('approveCampaign', () => {
+  it('inserts enrollments before flipping the campaign to active', async () => {
+    const campaign = {
+      id: 'camp',
+      account_id: 'a',
+      status: 'draft',
+      bands: ['late', 'cooling', 'gone'],
+      tag_ids: [],
+      exclude_tag_ids: [],
+      steps: [step()],
+    }
+    const { db, ops } = recordingDb(
+      { reactivation_campaigns: campaign, message_templates: [tpl()], reactivation_settings: null },
+      [row('c1', 40)],
+    )
+    await approveCampaign(db, 'a', 'camp', 'u', [], NOW)
+    const insertIdx = ops.findIndex(
+      (o) => o.table === 'reactivation_enrollments' && (o.op === 'insert' || o.op === 'upsert'),
+    )
+    const activateIdx = ops.findIndex(
+      (o) =>
+        o.table === 'reactivation_campaigns' &&
+        o.op === 'update' &&
+        (o.payload as { status?: string }).status === 'active',
+    )
+    expect(insertIdx).toBeGreaterThanOrEqual(0)
+    expect(activateIdx).toBeGreaterThan(insertIdx)
   })
 })

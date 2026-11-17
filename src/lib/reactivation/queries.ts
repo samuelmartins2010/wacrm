@@ -251,22 +251,10 @@ export async function approveCampaign(
     throw new ReactivationError('Nenhum contato elegível para esta campanha.', 400)
   }
 
-  // Claim the draft first so a double click can't enroll twice.
-  const { data: claimed, error: claimErr } = await admin
-    .from('reactivation_campaigns')
-    .update({
-      status: 'active',
-      approved_by: userId,
-      approved_at: now.toISOString(),
-      updated_at: now.toISOString(),
-    })
-    .eq('id', campaignId)
-    .eq('status', 'draft')
-    .select('id')
-    .maybeSingle()
-  if (claimErr) throw new ReactivationError(claimErr.message, 500)
-  if (!claimed) throw new ReactivationError('Só é possível alterar campanhas em rascunho.', 409)
-
+  // Enrollments go in while the campaign is still a draft: the runner and
+  // finishIdleCampaigns only look at active campaigns, so flipping to
+  // active last means the cron can never see an active campaign with no
+  // enrollments yet. Upsert-ignore makes a double click harmless.
   const iso = now.toISOString()
   const rows = [
     ...plan.enroll.map((contact_id) => ({
@@ -286,9 +274,26 @@ export async function approveCampaign(
     })),
   ]
   for (let i = 0; i < rows.length; i += 500) {
-    const { error } = await admin.from('reactivation_enrollments').insert(rows.slice(i, i + 500))
+    const { error } = await admin
+      .from('reactivation_enrollments')
+      .upsert(rows.slice(i, i + 500), { onConflict: 'campaign_id,contact_id', ignoreDuplicates: true })
     if (error) throw new ReactivationError(error.message, 500)
   }
+
+  const { data: activated, error: actErr } = await admin
+    .from('reactivation_campaigns')
+    .update({
+      status: 'active',
+      approved_by: userId,
+      approved_at: iso,
+      updated_at: iso,
+    })
+    .eq('id', campaignId)
+    .eq('status', 'draft')
+    .select('id')
+    .maybeSingle()
+  if (actErr) throw new ReactivationError(actErr.message, 500)
+  if (!activated) throw new ReactivationError('Só é possível alterar campanhas em rascunho.', 409)
   return { enrolled: plan.enroll.length, excluded: plan.excluded }
 }
 

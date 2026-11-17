@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { loadOptedOutPhones } from '@/lib/reactivation/opt-out'
 import { createClient } from '@/lib/supabase/server'
 import { sendTemplateMessage } from '@/lib/whatsapp/meta-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
@@ -176,14 +177,17 @@ export async function POST(request: Request) {
     const templateRow = rawTemplateRow ?? null
 
     // Contacts who opted out of bulk sends (Reativação "SAIR" or manual).
-    const { data: optedOutRows } = await supabase
-      .from('contacts')
-      .select('phone')
-      .eq('account_id', accountId)
-      .eq('do_not_contact', true)
-    const optedOutPhones = new Set(
-      (optedOutRows ?? []).map((r: { phone: string }) => sanitizePhoneForMeta(r.phone))
-    )
+    // Fails closed: if the check errors, nothing is sent.
+    let optedOutPhones: Set<string>
+    try {
+      optedOutPhones = await loadOptedOutPhones(supabase, accountId)
+    } catch (err) {
+      console.error('[broadcast] opt-out check failed:', err)
+      return NextResponse.json(
+        { error: 'Could not verify opted-out contacts. Nothing was sent.' },
+        { status: 500 }
+      )
+    }
 
     const results: BroadcastResult[] = []
     let sentCount = 0

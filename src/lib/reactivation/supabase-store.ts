@@ -38,7 +38,7 @@ export function supabaseRunnerStore(db: SupabaseClient): RunnerStore {
         .from('reactivation_sends')
         .select('id', { count: 'exact', head: true })
         .eq('account_id', accountId)
-        .gte('updated_at', sinceIso)
+        .gte('attempted_at', sinceIso)
       check(error, 'countSendsSince')
       return count ?? 0
     },
@@ -56,9 +56,24 @@ export function supabaseRunnerStore(db: SupabaseClient): RunnerStore {
       return !!data
     },
 
-    async updateEnrollment(id, patch) {
-      const { error } = await db.from('reactivation_enrollments').update(patch).eq('id', id)
+    async updateEnrollment(id, patch, onlyOpen = false) {
+      let q = db.from('reactivation_enrollments').update(patch).eq('id', id)
+      if (onlyOpen) q = q.in('status', ['pending', 'active'])
+      const { data, error } = await q.select('id')
       check(error, 'updateEnrollment')
+      return (data ?? []).length > 0
+    },
+
+    async refresh(enrollmentId) {
+      const { data, error } = await db
+        .from('reactivation_enrollments')
+        .select('*, contact:contacts!inner(id, name, phone, company, do_not_contact, last_inbound_at)')
+        .eq('id', enrollmentId)
+        .maybeSingle()
+      check(error, 'refresh')
+      if (!data) return null
+      const { contact, ...enrollment } = data as ReactivationEnrollment & { contact: RunnerContact }
+      return { enrollment, contact }
     },
 
     async getSend(enrollmentId, step) {
@@ -77,7 +92,7 @@ export function supabaseRunnerStore(db: SupabaseClient): RunnerStore {
       if (existing) {
         const { data, error } = await db
           .from('reactivation_sends')
-          .update({ attempts: existing.attempts + 1, updated_at: nowIso })
+          .update({ attempts: existing.attempts + 1, attempted_at: nowIso, updated_at: nowIso })
           .eq('id', existing.id)
           .eq('attempts', existing.attempts)
           .select('*')
@@ -95,6 +110,7 @@ export function supabaseRunnerStore(db: SupabaseClient): RunnerStore {
           attempts: 1,
           status: 'failed',
           error: 'in_progress',
+          attempted_at: nowIso,
           created_at: nowIso,
           updated_at: nowIso,
         })

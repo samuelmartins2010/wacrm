@@ -746,6 +746,7 @@ export interface ReactivationSend {
   enrollment_id: string;
   step: number;
   attempts: number;
+  attempted_at?: string;
   whatsapp_message_id: string | null;
   message_id: string | null;
   status: ReactivationSendStatus;

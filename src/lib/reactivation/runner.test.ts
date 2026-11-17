@@ -102,7 +102,7 @@ class MemStore implements RunnerStore {
       .map((e) => ({
         enrollment: { ...e },
         campaign: this.campaigns.get(e.campaign_id)!,
-        contact: this.contacts.get(e.contact_id)!,
+        contact: { ...this.contacts.get(e.contact_id)! },
       }))
   }
   async getSettings() {
@@ -118,8 +118,16 @@ class MemStore implements RunnerStore {
     e.status = 'active'
     return true
   }
-  async updateEnrollment(id: string, patch: Partial<ReactivationEnrollment>) {
-    Object.assign(this.enrollments.get(id)!, patch)
+  async updateEnrollment(id: string, patch: Partial<ReactivationEnrollment>, onlyOpen = false) {
+    const e = this.enrollments.get(id)!
+    if (onlyOpen && e.status !== 'pending' && e.status !== 'active') return false
+    Object.assign(e, patch)
+    return true
+  }
+  async refresh(id: string) {
+    const e = this.enrollments.get(id)
+    if (!e) return null
+    return { enrollment: { ...e }, contact: { ...this.contacts.get(e.contact_id)! } }
   }
   async getSend(enrollmentId: string, step: number) {
     return this.sends.find((s) => s.enrollment_id === enrollmentId && s.step === step) ?? null
@@ -355,5 +363,48 @@ describe('runReactivation', () => {
     store.addEnrollment('e1', {}, { name: null })
     await runReactivation(deps, NOW)
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ params: ['cliente'] }))
+  })
+
+  it('treats "sent to Meta but DB insert failed" as sent', async () => {
+    const { store, send, deps } = setup()
+    send.mockRejectedValue(new Error('sent to Meta but DB insert failed: boom'))
+    store.addEnrollment('e1')
+    await runReactivation(deps, NOW)
+    expect(store.enrollments.get('e1')).toMatchObject({ status: 'active', current_step: 1 })
+    expect(store.sends[0].status).toBe('sent')
+  })
+
+  it('bookkeeping failure after a successful send is not retried', async () => {
+    const { store, deps } = setup()
+    store.findMessageId = async () => {
+      throw new Error('db down')
+    }
+    store.addEnrollment('e1')
+    await runReactivation(deps, NOW)
+    expect(store.enrollments.get('e1')!.current_step).toBe(1)
+    expect(store.sends[0]).toMatchObject({ status: 'sent', whatsapp_message_id: 'wamid.1' })
+  })
+
+  it('rechecks the contact after the claim', async () => {
+    const { store, send, deps } = setup()
+    store.addEnrollment('e1', { status: 'active', current_step: 1 })
+    const stale = await store.loadDue(NOW, 50)
+    // Reply lands after loadDue's snapshot.
+    store.contacts.get('c-e1')!.last_inbound_at = addDays(NOW, -0.1).toISOString()
+    store.loadDue = async () => stale
+    await runReactivation(deps, NOW)
+    expect(send).not.toHaveBeenCalled()
+    expect(store.enrollments.get('e1')).toMatchObject({ status: 'replied', replied_step: 1 })
+  })
+
+  it('does not overwrite a reply that arrives during the send', async () => {
+    const { store, send, deps } = setup()
+    store.addEnrollment('e1', { status: 'active', current_step: 1 })
+    send.mockImplementation(async () => {
+      store.enrollments.get('e1')!.status = 'replied'
+      return { whatsapp_message_id: 'wamid.2' }
+    })
+    await runReactivation(deps, NOW)
+    expect(store.enrollments.get('e1')!.status).toBe('replied')
   })
 })

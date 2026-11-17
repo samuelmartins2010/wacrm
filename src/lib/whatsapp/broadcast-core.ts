@@ -78,6 +78,38 @@ export interface BroadcastPlan {
 
 const MAX_RECIPIENTS = 1000;
 
+const OPT_OUT_CHUNK = 200;
+
+/**
+ * Ids (among `ids`) of contacts that opted out of bulk sends. Chunked to
+ * keep the PostgREST URL short; throws on error so a broken check never
+ * lets a broadcast reach opted-out contacts (fail closed).
+ */
+export async function loadOptedOutContactIds(
+  db: SupabaseClient,
+  accountId: string,
+  ids: string[]
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  for (let i = 0; i < ids.length; i += OPT_OUT_CHUNK) {
+    const { data, error } = await db
+      .from('contacts')
+      .select('id')
+      .eq('account_id', accountId)
+      .eq('do_not_contact', true)
+      .in('id', ids.slice(i, i + OPT_OUT_CHUNK));
+    if (error) {
+      throw new BroadcastError(
+        'opt_out_check_failed',
+        `Could not verify opted-out contacts: ${error.message}`,
+        500
+      );
+    }
+    for (const r of (data ?? []) as { id: string }[]) out.add(r.id);
+  }
+  return out;
+}
+
 /** Drop recipients whose contact opted out of bulk sends. */
 export function excludeOptedOut<T extends { contactId: string }>(
   rows: T[],
@@ -198,15 +230,9 @@ export async function createBroadcast(
 
   // Contacts who opted out of bulk sends (Reativação "SAIR" or manual)
   // are skipped and reported alongside `rejected`.
-  const { data: optedOutRows } = await db
-    .from('contacts')
-    .select('id')
-    .eq('account_id', accountId)
-    .eq('do_not_contact', true)
-    .in('id', deduped.map((r) => r.contactId));
   const { kept, optedOut } = excludeOptedOut(
     deduped,
-    new Set((optedOutRows ?? []).map((r: { id: string }) => r.id))
+    await loadOptedOutContactIds(db, accountId, deduped.map((r) => r.contactId))
   );
   if (kept.length === 0) {
     throw new BroadcastError(

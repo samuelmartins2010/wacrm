@@ -44,7 +44,10 @@ export interface RunnerStore {
   countSendsSince(accountId: string, sinceIso: string): Promise<number>
   /** Atomically move next_run_at from `expected` to `nextRunAt`; false if someone else did. */
   claim(enrollmentId: string, expected: string, nextRunAt: string): Promise<boolean>
-  updateEnrollment(id: string, patch: Partial<ReactivationEnrollment>): Promise<void>
+  /** With onlyOpen, applies only while status is pending/active; returns whether it applied. */
+  updateEnrollment(id: string, patch: Partial<ReactivationEnrollment>, onlyOpen?: boolean): Promise<boolean>
+  /** Fresh enrollment + contact state (after the claim). */
+  refresh(enrollmentId: string): Promise<{ enrollment: ReactivationEnrollment; contact: RunnerContact } | null>
   getSend(enrollmentId: string, step: number): Promise<ReactivationSend | null>
   /** Upsert the (enrollment, step) row and increment attempts. */
   recordAttempt(accountId: string, enrollmentId: string, step: number, nowIso: string): Promise<ReactivationSend>
@@ -74,6 +77,8 @@ export interface RunResult {
 
 const CLAIM_LEASE_MS = 10 * 60_000
 const MAX_ATTEMPTS = 2
+/** engineSendTemplate throws this after Meta already accepted the message. */
+const SENT_BUT_NOT_SAVED = /sent to Meta but DB insert failed/i
 
 export async function runReactivation(deps: RunnerDeps, now: Date): Promise<RunResult> {
   const { store } = deps
@@ -85,7 +90,7 @@ export async function runReactivation(deps: RunnerDeps, now: Date): Promise<RunR
   const sentToday = new Map<string, number>()
   const pausedCampaigns = new Set<string>()
 
-  for (const { enrollment: e, campaign, contact } of due) {
+  for (const { enrollment: e, campaign, contact: staleContact } of due) {
     if (pausedCampaigns.has(campaign.id)) continue
     const accountId = e.account_id
     let settings = settingsCache.get(accountId)
@@ -123,8 +128,23 @@ export async function runReactivation(deps: RunnerDeps, now: Date): Promise<RunR
       continue
     }
 
+    // Re-read after the claim: the loadDue snapshot can be minutes old.
+    const fresh = await store.refresh(e.id)
+    if (!fresh || (fresh.enrollment.status !== 'pending' && fresh.enrollment.status !== 'active')) {
+      result.skipped++
+      continue
+    }
+    const contact = fresh.contact ?? staleContact
+
+    // Every terminal/advancing write only applies while the enrollment is
+    // still open, so a reply/opt-out recorded by the webhook is never
+    // overwritten by the runner.
     const end = (status: ReactivationEnrollment['status'], extra: Partial<ReactivationEnrollment> = {}) =>
-      store.updateEnrollment(e.id, { status, ended_at: nowIso, next_run_at: null, updated_at: nowIso, ...extra })
+      store.updateEnrollment(
+        e.id,
+        { status, ended_at: nowIso, next_run_at: null, updated_at: nowIso, ...extra },
+        true,
+      )
 
     // 4. Re-check eligibility right before sending.
     if (contact.do_not_contact) {
@@ -150,11 +170,15 @@ export async function runReactivation(deps: RunnerDeps, now: Date): Promise<RunR
     const advance = async () => {
       const next = campaign.steps[stepNo]
       if (next) {
-        await store.updateEnrollment(e.id, {
-          current_step: stepNo,
-          next_run_at: addDays(now, next.wait_days).toISOString(),
-          updated_at: nowIso,
-        })
+        await store.updateEnrollment(
+          e.id,
+          {
+            current_step: stepNo,
+            next_run_at: addDays(now, next.wait_days).toISOString(),
+            updated_at: nowIso,
+          },
+          true,
+        )
       } else {
         await end('completed', { current_step: stepNo })
       }
@@ -191,9 +215,11 @@ export async function runReactivation(deps: RunnerDeps, now: Date): Promise<RunR
     const attempt = await store.recordAttempt(accountId, e.id, stepNo, nowIso)
     sentToday.set(accountId, sentToday.get(accountId)! + 1)
 
+    // Only the Meta call decides success/failure. Bookkeeping after a
+    // successful send must never turn into a retry (= duplicate touch).
+    let wamid: string | null = null
+    let messageId: string | null = null
     try {
-      let wamid: string
-      let messageId: string | null
       if (deps.dryRun) {
         wamid = `dryrun-${randomUUID()}`
         messageId = await store.insertDryRunMessage(conversationId, template.name, wamid)
@@ -208,32 +234,43 @@ export async function runReactivation(deps: RunnerDeps, now: Date): Promise<RunR
           params: resolveParams(step.params, contact),
         })
         wamid = r.whatsapp_message_id
-        messageId = await store.findMessageId(conversationId, wamid)
       }
-      await store.updateSend(attempt.id, {
-        status: 'sent',
-        whatsapp_message_id: wamid,
-        message_id: messageId,
-        error: null,
-        updated_at: nowIso,
-      })
-      await advance()
-      result.sent++
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      await store.updateSend(attempt.id, { status: 'failed', error: msg.slice(0, 500), updated_at: nowIso })
-      const kind = classifySendError(msg)
-      if (kind === 'template_unavailable') {
-        await store.pauseCampaign(campaign.id, `Toque ${stepNo}: ${msg}`.slice(0, 500))
-        pausedCampaigns.add(campaign.id)
-        await store.updateEnrollment(e.id, { next_run_at: nowIso })
-      } else if (kind === 'retryable' && attempt.attempts < MAX_ATTEMPTS) {
-        await store.updateEnrollment(e.id, { next_run_at: addDays(now, 1).toISOString() })
-      } else {
-        await end('failed', { end_reason: kind })
+      if (!SENT_BUT_NOT_SAVED.test(msg)) {
+        await store.updateSend(attempt.id, { status: 'failed', error: msg.slice(0, 500), updated_at: nowIso })
+        const kind = classifySendError(msg)
+        if (kind === 'template_unavailable') {
+          await store.pauseCampaign(campaign.id, `Toque ${stepNo}: ${msg}`.slice(0, 500))
+          pausedCampaigns.add(campaign.id)
+          await store.updateEnrollment(e.id, { next_run_at: nowIso }, true)
+        } else if (kind === 'retryable' && attempt.attempts < MAX_ATTEMPTS) {
+          await store.updateEnrollment(e.id, { next_run_at: addDays(now, 1).toISOString() }, true)
+        } else {
+          await end('failed', { end_reason: kind })
+        }
+        result.failed++
+        continue
       }
-      result.failed++
+      // Meta has it; only our inbox copy is missing. Count as sent.
     }
+
+    if (wamid && !messageId && !deps.dryRun) {
+      try {
+        messageId = await store.findMessageId(conversationId, wamid)
+      } catch {
+        messageId = null
+      }
+    }
+    await store.updateSend(attempt.id, {
+      status: 'sent',
+      whatsapp_message_id: wamid,
+      message_id: messageId,
+      error: null,
+      updated_at: nowIso,
+    })
+    await advance()
+    result.sent++
   }
 
   await store.finishIdleCampaigns(nowIso)
