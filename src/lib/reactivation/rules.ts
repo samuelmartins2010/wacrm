@@ -171,6 +171,9 @@ export function isOptoutMessage(text: string, keywords: string[]): boolean {
   return keywords.some((k) => normalizeOptout(k) === n)
 }
 
+/** Attempts per touch (first send + one retry), for sync and async failures. */
+export const MAX_SEND_ATTEMPTS = 2
+
 export type SendErrorKind = 'invalid_recipient' | 'retryable' | 'template_unavailable'
 
 /** Meta codes: the number can't receive this message. */

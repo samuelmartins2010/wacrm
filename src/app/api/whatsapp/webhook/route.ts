@@ -86,6 +86,8 @@ interface WhatsAppWebhookEntry {
         status: string
         timestamp: string
         recipient_id: string
+        /** Present on status=failed: Meta's reason (code + message). */
+        errors?: Array<{ code?: number; title?: string; message?: string; error_data?: { details?: string } }>
       }>
     }
     field: string
@@ -360,6 +362,7 @@ async function handleStatusUpdate(status: {
   status: string
   timestamp: string
   recipient_id: string
+  errors?: Array<{ code?: number; title?: string; message?: string; error_data?: { details?: string } }>
 }) {
   // 1) Mirror onto messages (legacy behavior) — Meta's status values
   //    already match the CHECK constraint on messages.status. No
@@ -416,7 +419,18 @@ async function handleStatusUpdate(status: {
 
   // 2b) Mirror onto reactivation_sends (best-effort).
   try {
-    await mirrorReactivationStatus(supabaseInboundStore(supabaseAdmin()), status.id, status.status)
+    const metaError = status.errors?.[0]
+    await mirrorReactivationStatus(
+      supabaseInboundStore(supabaseAdmin()),
+      status.id,
+      status.status,
+      metaError
+        ? {
+            code: metaError.code ?? null,
+            message: metaError.error_data?.details || metaError.message || metaError.title || null,
+          }
+        : null,
+    )
   } catch (err) {
     console.error('mirrorReactivationStatus failed:', err)
   }

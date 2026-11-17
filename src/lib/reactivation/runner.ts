@@ -16,6 +16,7 @@ import type { engineSendTemplate } from '@/lib/automations/meta-send'
 import {
   addDays,
   classifySendError,
+  MAX_SEND_ATTEMPTS,
   isWithinWindow,
   nextDayWindowOpen,
   nextWindowOpen,
@@ -76,7 +77,6 @@ export interface RunResult {
 }
 
 const CLAIM_LEASE_MS = 10 * 60_000
-const MAX_ATTEMPTS = 2
 /** engineSendTemplate throws this after Meta already accepted the message. */
 const SENT_BUT_NOT_SAVED = /sent to Meta but DB insert failed/i
 
@@ -251,7 +251,7 @@ export async function runReactivation(deps: RunnerDeps, now: Date): Promise<RunR
           await store.pauseCampaign(campaign.id, `Toque ${stepNo}: ${msg}`.slice(0, 500))
           pausedCampaigns.add(campaign.id)
           await store.updateEnrollment(e.id, { next_run_at: nowIso }, true)
-        } else if (kind === 'retryable' && attempt.attempts < MAX_ATTEMPTS) {
+        } else if (kind === 'retryable' && attempt.attempts < MAX_SEND_ATTEMPTS) {
           await store.updateEnrollment(e.id, { next_run_at: addDays(now, 1).toISOString() }, true)
         } else {
           await end('failed', { end_reason: kind })
