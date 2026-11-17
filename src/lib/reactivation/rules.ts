@@ -173,7 +173,29 @@ export function isOptoutMessage(text: string, keywords: string[]): boolean {
 
 export type SendErrorKind = 'invalid_recipient' | 'retryable' | 'template_unavailable'
 
-export function classifySendError(message: string): SendErrorKind {
+/** Meta codes: the number can't receive this message. */
+const INVALID_RECIPIENT_CODES = new Set([131026, 131030, 131021])
+/** Meta codes: the template itself is unusable until someone fixes it. */
+const TEMPLATE_CODES = new Set([132000, 132001, 132005, 132007, 132012, 132015, 132016])
+
+export interface SendErrorInfo {
+  code?: number | null
+  message?: string | null
+}
+
+/**
+ * Classify a Meta send failure. The numeric code (MetaApiError.code or a
+ * status-webhook `errors[].code`) decides; the text is only a fallback for
+ * errors without a code (network, our own validation).
+ */
+export function classifySendError(err: string | SendErrorInfo | Error): SendErrorKind {
+  const code = typeof err === 'string' ? undefined : (err as SendErrorInfo).code ?? undefined
+  const message = typeof err === 'string' ? err : (err.message ?? '')
+  if (typeof code === 'number') {
+    if (INVALID_RECIPIENT_CODES.has(code)) return 'invalid_recipient'
+    if (TEMPLATE_CODES.has(code)) return 'template_unavailable'
+    return 'retryable'
+  }
   if (isRecipientNotAllowedError(message) || /contact phone invalid|131026/i.test(message)) {
     return 'invalid_recipient'
   }

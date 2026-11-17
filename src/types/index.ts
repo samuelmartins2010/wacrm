@@ -751,6 +751,8 @@ export interface ReactivationSend {
   message_id: string | null;
   status: ReactivationSendStatus;
   error: string | null;
+  /** Numeric Meta error code (sync response or status webhook). */
+  error_code?: number | null;
   created_at: string;
   updated_at: string;
 }

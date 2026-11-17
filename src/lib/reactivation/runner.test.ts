@@ -9,6 +9,7 @@ import type {
 import { DEFAULT_SETTINGS } from './queries'
 import { addDays } from './rules'
 import { runReactivation, type DueItem, type RunnerContact, type RunnerStore } from './runner'
+import { MetaApiError } from '@/lib/whatsapp/meta-api'
 
 // Tuesday 2026-11-17 10:00 São Paulo.
 const NOW = new Date('2026-11-17T13:00:00Z')
@@ -406,5 +407,14 @@ describe('runReactivation', () => {
     })
     await runReactivation(deps, NOW)
     expect(store.enrollments.get('e1')!.status).toBe('replied')
+  })
+
+  it('classifies by Meta code and records it on the send', async () => {
+    const { store, send, deps } = setup()
+    send.mockRejectedValue(new MetaApiError('Template is disabled', 400, 132016))
+    store.addEnrollment('e1')
+    await runReactivation(deps, NOW)
+    expect(store.campaigns.get('camp')!.status).toBe('paused')
+    expect(store.sends[0]).toMatchObject({ status: 'failed', error_code: 132016, error: 'Template is disabled' })
   })
 })

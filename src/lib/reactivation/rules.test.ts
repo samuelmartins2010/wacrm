@@ -187,3 +187,22 @@ describe('startOfLocalDay', () => {
     )
   })
 })
+
+describe('classifySendError by Meta code', () => {
+  it('uses the code when the text has none', () => {
+    expect(classifySendError({ code: 132015, message: 'Template is Paused' })).toBe('template_unavailable')
+    expect(classifySendError({ code: 132016, message: 'Template is disabled' })).toBe('template_unavailable')
+    expect(classifySendError({ code: 132001, message: 'Template name does not exist' })).toBe('template_unavailable')
+    expect(classifySendError({ code: 131026, message: 'Message undeliverable' })).toBe('invalid_recipient')
+    expect(classifySendError({ code: 131030, message: 'Recipient not allowed' })).toBe('invalid_recipient')
+    expect(classifySendError({ code: 131049, message: 'healthy ecosystem' })).toBe('retryable')
+    expect(classifySendError({ code: 130429, message: 'Rate limit hit' })).toBe('retryable')
+  })
+  it('the code wins over misleading text', () => {
+    expect(classifySendError({ code: 131049, message: 'Template does not exist' })).toBe('retryable')
+  })
+  it('falls back to the text when there is no code', () => {
+    expect(classifySendError({ message: '(#132015) Template is Paused' })).toBe('template_unavailable')
+    expect(classifySendError(new Error('contact phone invalid: 123'))).toBe('invalid_recipient')
+  })
+})

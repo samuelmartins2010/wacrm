@@ -238,8 +238,15 @@ export async function runReactivation(deps: RunnerDeps, now: Date): Promise<RunR
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       if (!SENT_BUT_NOT_SAVED.test(msg)) {
-        await store.updateSend(attempt.id, { status: 'failed', error: msg.slice(0, 500), updated_at: nowIso })
-        const kind = classifySendError(msg)
+        const code = (err as { code?: unknown }).code
+        const errorCode = typeof code === 'number' ? code : null
+        await store.updateSend(attempt.id, {
+          status: 'failed',
+          error: msg.slice(0, 500),
+          error_code: errorCode,
+          updated_at: nowIso,
+        })
+        const kind = classifySendError({ code: errorCode, message: msg })
         if (kind === 'template_unavailable') {
           await store.pauseCampaign(campaign.id, `Toque ${stepNo}: ${msg}`.slice(0, 500))
           pausedCampaigns.add(campaign.id)
