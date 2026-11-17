@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { loadOptedOutPhones } from '@/lib/reactivation/opt-out'
+import { isOptedOutPhone, loadOptedOut } from '@/lib/reactivation/opt-out'
 import { createClient } from '@/lib/supabase/server'
 import { sendTemplateMessage } from '@/lib/whatsapp/meta-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
@@ -48,6 +48,8 @@ interface BroadcastResult {
  */
 interface NewRecipient {
   phone: string
+  /** Contact row this phone came from (dashboard sends); used for opt-out. */
+  contact_id?: string
   /** Body variable values, one per {{N}}. Legacy field. */
   params?: string[]
   /**
@@ -178,9 +180,9 @@ export async function POST(request: Request) {
 
     // Contacts who opted out of bulk sends (Reativação "SAIR" or manual).
     // Fails closed: if the check errors, nothing is sent.
-    let optedOutPhones: Set<string>
+    let optedOut: Awaited<ReturnType<typeof loadOptedOut>>
     try {
-      optedOutPhones = await loadOptedOutPhones(supabase, accountId)
+      optedOut = await loadOptedOut(supabase, accountId)
     } catch (err) {
       console.error('[broadcast] opt-out check failed:', err)
       return NextResponse.json(
@@ -206,7 +208,10 @@ export async function POST(request: Request) {
         continue
       }
 
-      if (optedOutPhones.has(sanitized)) {
+      if (
+        (recipient.contact_id && optedOut.ids.has(recipient.contact_id)) ||
+        isOptedOutPhone(sanitized, optedOut.keys)
+      ) {
         results.push({
           phone: recipient.phone,
           status: 'failed',

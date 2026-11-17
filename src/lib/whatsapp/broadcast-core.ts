@@ -28,6 +28,7 @@ import {
 } from '@/lib/whatsapp/phone-utils';
 import { isMessageTemplate } from '@/lib/whatsapp/template-row-guard';
 import type { MessageTemplate } from '@/types';
+import { loadOptedOut, partitionBroadcastRecipients } from '@/lib/reactivation/opt-out';
 import { findOrCreateContact } from '@/lib/api/v1/contacts';
 
 /** Thrown by createBroadcast on a caller-visible failure; route maps it. */
@@ -77,47 +78,6 @@ export interface BroadcastPlan {
 }
 
 const MAX_RECIPIENTS = 1000;
-
-const OPT_OUT_CHUNK = 200;
-
-/**
- * Ids (among `ids`) of contacts that opted out of bulk sends. Chunked to
- * keep the PostgREST URL short; throws on error so a broken check never
- * lets a broadcast reach opted-out contacts (fail closed).
- */
-export async function loadOptedOutContactIds(
-  db: SupabaseClient,
-  accountId: string,
-  ids: string[]
-): Promise<Set<string>> {
-  const out = new Set<string>();
-  for (let i = 0; i < ids.length; i += OPT_OUT_CHUNK) {
-    const { data, error } = await db
-      .from('contacts')
-      .select('id')
-      .eq('account_id', accountId)
-      .eq('do_not_contact', true)
-      .in('id', ids.slice(i, i + OPT_OUT_CHUNK));
-    if (error) {
-      throw new BroadcastError(
-        'opt_out_check_failed',
-        `Could not verify opted-out contacts: ${error.message}`,
-        500
-      );
-    }
-    for (const r of (data ?? []) as { id: string }[]) out.add(r.id);
-  }
-  return out;
-}
-
-/** Drop recipients whose contact opted out of bulk sends. */
-export function excludeOptedOut<T extends { contactId: string }>(
-  rows: T[],
-  optedOutIds: Set<string>
-): { kept: T[]; optedOut: number } {
-  const kept = rows.filter((r) => !optedOutIds.has(r.contactId));
-  return { kept, optedOut: rows.length - kept.length };
-}
 
 /**
  * Validate + persist a broadcast, resolving each recipient to a
@@ -230,10 +190,26 @@ export async function createBroadcast(
 
   // Contacts who opted out of bulk sends (Reativação "SAIR" or manual)
   // are skipped and reported alongside `rejected`.
-  const { kept, optedOut } = excludeOptedOut(
-    deduped,
-    await loadOptedOutContactIds(db, accountId, deduped.map((r) => r.contactId))
+  // Opted out by contact_id, or by any form of the phone (9º dígito,
+  // 0 do DDD) when the API caller's number matched a different contact
+  // row. Fails closed: if the check errors, nothing is sent.
+  let optedOutSets: Awaited<ReturnType<typeof loadOptedOut>>;
+  try {
+    optedOutSets = await loadOptedOut(db, accountId);
+  } catch (err) {
+    throw new BroadcastError(
+      'opt_out_check_failed',
+      `Could not verify opted-out contacts: ${err instanceof Error ? err.message : String(err)}`,
+      500
+    );
+  }
+  const partition = partitionBroadcastRecipients(
+    deduped.map((r) => ({ ...r, contact_id: r.contactId })),
+    optedOutSets.ids,
+    optedOutSets.keys
   );
+  const kept = partition.allowed;
+  const optedOut = partition.optedOut.length;
   if (kept.length === 0) {
     throw new BroadcastError(
       'bad_request',
