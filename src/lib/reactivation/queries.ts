@@ -273,11 +273,33 @@ export async function approveCampaign(
       end_reason: 'removed_on_review',
     })),
   ]
-  for (let i = 0; i < rows.length; i += 500) {
-    const { error } = await admin
+  // uq_reactivation_one_open_per_contact (migration 046) rejects a
+  // contact that entered another campaign after the preview. Insert in
+  // chunks; on that violation, retry the chunk row by row and count the
+  // rejected rows as "já está em outra campanha" instead of failing.
+  const insert = (batch: typeof rows) =>
+    admin
       .from('reactivation_enrollments')
-      .upsert(rows.slice(i, i + 500), { onConflict: 'campaign_id,contact_id', ignoreDuplicates: true })
-    if (error) throw new ReactivationError(error.message, 500)
+      .upsert(batch, { onConflict: 'campaign_id,contact_id', ignoreDuplicates: true })
+  let alreadyInAnother = 0
+  for (let i = 0; i < rows.length; i += 500) {
+    const chunk = rows.slice(i, i + 500)
+    const { error } = await insert(chunk)
+    if (!error) continue
+    if (error.code !== '23505') throw new ReactivationError(error.message, 500)
+    for (const one of chunk) {
+      const { error: e1 } = await insert([one])
+      if (!e1) continue
+      if (e1.code === '23505') alreadyInAnother++
+      else throw new ReactivationError(e1.message, 500)
+    }
+  }
+  const enrolled = plan.enroll.length - alreadyInAnother
+  if (enrolled <= 0) {
+    throw new ReactivationError(
+      'Todos os contatos elegíveis já estão em outra campanha de reativação.',
+      400,
+    )
   }
 
   const { data: activated, error: actErr } = await admin
@@ -294,7 +316,7 @@ export async function approveCampaign(
     .maybeSingle()
   if (actErr) throw new ReactivationError(actErr.message, 500)
   if (!activated) throw new ReactivationError('Só é possível alterar campanhas em rascunho.', 409)
-  return { enrolled: plan.enroll.length, excluded: plan.excluded }
+  return { enrolled, excluded: plan.excluded + alreadyInAnother }
 }
 
 export type CampaignAction = 'pause' | 'resume' | 'finish'

@@ -187,7 +187,12 @@ describe('validateCampaignSteps', () => {
 type Op = { table: string; op: string; payload?: unknown }
 
 /** Thenable query builder that records writes and answers reads per table. */
-function recordingDb(answers: Record<string, unknown>, rpcRows: unknown[]) {
+type WriteError = { code: string; message: string } | null
+function recordingDb(
+  answers: Record<string, unknown>,
+  rpcRows: unknown[],
+  writeError: (table: string, op: string, payload: unknown) => WriteError = () => null,
+) {
   const ops: Op[] = []
   const db = {
     rpc: async () => ({ data: rpcRows, error: null }),
@@ -195,7 +200,11 @@ function recordingDb(answers: Record<string, unknown>, rpcRows: unknown[]) {
       let op = 'select'
       let payload: unknown
       const result = () => {
-        if (op !== 'select') return { data: op === 'update' ? { id: 'x' } : null, error: null }
+        if (op !== 'select') {
+          const err = writeError(table, op, payload)
+          if (err) return { data: null, error: err }
+          return { data: op === 'update' ? { id: 'x' } : null, error: null }
+        }
         return { data: answers[table] ?? null, error: null }
       }
       const b: Record<string, unknown> = {}
@@ -248,5 +257,50 @@ describe('approveCampaign', () => {
     )
     expect(insertIdx).toBeGreaterThanOrEqual(0)
     expect(activateIdx).toBeGreaterThan(insertIdx)
+  })
+
+  it('treats the one-open-enrollment violation as "already in another campaign"', async () => {
+    const campaign = {
+      id: 'camp', account_id: 'a', status: 'draft', bands: ['late', 'cooling', 'gone'],
+      tag_ids: [], exclude_tag_ids: [], steps: [step()],
+    }
+    // c2 entered another campaign between the preview and this insert.
+    const conflict = (table: string, op: string, payload: unknown) => {
+      if (table !== 'reactivation_enrollments' || op !== 'upsert') return null
+      const rows = payload as { contact_id: string; status: string }[]
+      return rows.some((r) => r.contact_id === 'c2' && r.status === 'pending')
+        ? { code: '23505', message: 'duplicate key value violates unique constraint "uq_reactivation_one_open_per_contact"' }
+        : null
+    }
+    const { db, ops } = recordingDb(
+      { reactivation_campaigns: campaign, message_templates: [tpl()], reactivation_settings: null },
+      [row('c1', 40), row('c2', 40), row('c3', 40)],
+      conflict,
+    )
+    const r = await approveCampaign(db, 'a', 'camp', 'u', [], NOW)
+    expect(r).toEqual({ enrolled: 2, excluded: 1 })
+    const activated = ops.some(
+      (o) => o.table === 'reactivation_campaigns' && o.op === 'update' && (o.payload as { status?: string }).status === 'active',
+    )
+    expect(activated).toBe(true)
+  })
+
+  it('fails with 400 (not 500) when every contact is already in another campaign', async () => {
+    const campaign = {
+      id: 'camp', account_id: 'a', status: 'draft', bands: ['late', 'cooling', 'gone'],
+      tag_ids: [], exclude_tag_ids: [], steps: [step()],
+    }
+    const { db } = recordingDb(
+      { reactivation_campaigns: campaign, message_templates: [tpl()], reactivation_settings: null },
+      [row('c1', 40)],
+      (table, op, payload) =>
+        table === 'reactivation_enrollments' && op === 'upsert' && (payload as { status: string }[]).some((r) => r.status === 'pending')
+          ? { code: '23505', message: 'uq_reactivation_one_open_per_contact' }
+          : null,
+    )
+    const err = await approveCampaign(db, 'a', 'camp', 'u', [], NOW).catch((e) => e)
+    expect(err).toBeInstanceOf(ReactivationError)
+    expect(err.status).toBe(400)
+    expect(err.message).toMatch(/outra campanha/)
   })
 })
