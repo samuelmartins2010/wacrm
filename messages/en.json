@@ -55,7 +55,8 @@
     "defaultAvatar": "Avatar",
     "menuProfile": "Profile",
     "menuSettings": "Settings",
-    "menuSignOut": "Sign out"
+    "menuSignOut": "Sign out",
+    "reactivation": "Reactivation"
   },
   "Header": {
     "dashboard": "Dashboard",
@@ -72,7 +73,8 @@
     "defaultAvatar": "Avatar",
     "menuProfile": "Profile",
     "menuSettings": "Settings",
-    "menuSignOut": "Sign out"
+    "menuSignOut": "Sign out",
+    "reactivation": "Reactivation"
   },
   "ModeToggle": {
     "switchMode": "Switch to {mode} mode"
@@ -2037,5 +2039,178 @@
     "oneDayLeft": "Last day of your free trial.",
     "lastDay": "Your free trial ends today.",
     "contactSupport": "Contact support"
+  },
+  "Reactivation": {
+    "nav": {
+      "panel": "Overview",
+      "campaigns": "Campaigns",
+      "settings": "Settings"
+    },
+    "title": "Reactivation",
+    "subtitle": "Find contacts who stopped talking to you and bring them back with a message sequence.",
+    "bands": {
+      "late": "Late",
+      "cooling": "Cooling",
+      "gone": "Gone"
+    },
+    "bandHint": {
+      "late": "{days}+ days silent",
+      "cooling": "{days}+ days silent",
+      "gone": "{days}+ days silent"
+    },
+    "exclusions": {
+      "do_not_contact": "Opted out",
+      "invalid_phone": "Invalid phone",
+      "in_active_campaign": "Already in another campaign",
+      "resting": "Resting",
+      "recent_outbound": "Messaged in the last {days} days",
+      "removed": "Removed by you",
+      "eligible": "Eligible"
+    },
+    "campaignStatus": {
+      "draft": "Draft",
+      "active": "Active",
+      "paused": "Paused",
+      "finished": "Finished"
+    },
+    "enrollmentStatus": {
+      "pending": "Waiting",
+      "active": "In progress",
+      "replied": "Replied",
+      "completed": "Completed",
+      "opted_out": "Opted out",
+      "failed": "Failed",
+      "removed": "Removed",
+      "cancelled": "Cancelled"
+    },
+    "params": {
+      "first_name": "First name",
+      "name": "Full name",
+      "company": "Company",
+      "fixed": "Fixed text"
+    },
+    "common": {
+      "loading": "Loading…",
+      "retry": "Retry",
+      "back": "Back",
+      "save": "Save",
+      "saved": "Saved",
+      "error": "Something went wrong.",
+      "noTags": "No tags"
+    },
+    "panel": {
+      "contacts": "Inactive contacts",
+      "name": "Name",
+      "phone": "Phone",
+      "days": "Days silent",
+      "band": "Band",
+      "situation": "Status",
+      "allTags": "All tags",
+      "filterTag": "Tag",
+      "empty": "No inactive contacts in this band. Good sign!",
+      "createFromFilter": "Create campaign from this filter",
+      "page": "Page {page} of {pages}",
+      "prev": "Previous",
+      "next": "Next",
+      "explain": "Days are counted since the contact's last message. Contacts who never wrote are not listed."
+    },
+    "campaigns": {
+      "title": "Reactivation campaigns",
+      "new": "New campaign",
+      "empty": "No campaigns yet.",
+      "name": "Name",
+      "status": "Status",
+      "audience": "Audience",
+      "replied": "Replied",
+      "inProgress": "In progress",
+      "created": "Created"
+    },
+    "wizard": {
+      "title": "New reactivation campaign",
+      "stepAudience": "Audience",
+      "stepTouches": "Touches",
+      "stepReview": "Review",
+      "name": "Campaign name",
+      "namePlaceholder": "e.g. November win-back",
+      "bands": "Inactivity bands",
+      "includeTags": "Only contacts with these tags (optional)",
+      "excludeTags": "Exclude contacts with these tags (optional)",
+      "touch": "Touch {n}",
+      "addTouch": "Add touch",
+      "removeTouch": "Remove",
+      "template": "Approved template",
+      "chooseTemplate": "Choose a template",
+      "noTemplates": "No approved template without a media header. Create and approve one in Settings > Templates.",
+      "variable": "Variable {n}",
+      "fixedPlaceholder": "Text",
+      "waitDays": "Days to wait before this touch",
+      "waitFirst": "Sent as soon as the campaign starts (respecting hours and daily limit).",
+      "touchHint": "A contact only gets the next touch if they haven't replied. Anyone who replies leaves the sequence and lands in the Inbox.",
+      "next": "Continue",
+      "review": "Review audience",
+      "eligible": "{count, plural, =0 {No eligible contacts} =1 {1 eligible contact} other {# eligible contacts}}",
+      "excluded": "{count, plural, =0 {None excluded} =1 {1 excluded} other {# excluded}}",
+      "remove": "Remove",
+      "restore": "Restore",
+      "preview": "Message preview",
+      "previewFor": "Example for {name}",
+      "limits": "Gradual sending: up to {limit} messages per day for the account, during business hours. Change it in Reactivation > Settings.",
+      "approve": "Approve and start",
+      "approving": "Starting…",
+      "approveConfirm": "{count, plural, =1 {1 contact will receive} other {# contacts will receive}} the sequence. The audience is frozen once started.",
+      "saveDraft": "Save draft",
+      "deleteDraft": "Delete draft",
+      "adminOnly": "Only admins create and approve campaigns."
+    },
+    "detail": {
+      "audience": "Audience",
+      "sent": "Touches sent",
+      "delivered": "Delivered",
+      "read": "Read",
+      "replied": "Replied",
+      "optedOut": "Opted out",
+      "failed": "Failed",
+      "inProgress": "In progress",
+      "returned": "Came back on their own",
+      "pause": "Pause",
+      "resume": "Resume",
+      "finish": "Finish",
+      "finishConfirm": "Finishing cancels touches that haven't been sent yet. Continue?",
+      "paused": "Campaign paused",
+      "contact": "Contact",
+      "status": "Status",
+      "step": "Touch",
+      "repliedAt": "Replied at touch",
+      "openChat": "Open chat",
+      "editDraft": "Keep editing",
+      "error": "Error"
+    },
+    "settings": {
+      "title": "Reactivation settings",
+      "bands": "Bands (days since the contact last wrote)",
+      "late": "Late from",
+      "cooling": "Cooling from",
+      "gone": "Gone from",
+      "days": "days",
+      "rest": "Rest period after a campaign",
+      "recent": "Skip contacts the business messaged in the last",
+      "dailyLimit": "Sends per day (whole account)",
+      "window": "Sending hours (Brasília time)",
+      "monFri": "Monday to Friday",
+      "sat": "Saturday",
+      "sun": "Sunday",
+      "closed": "Don't send",
+      "from": "from",
+      "to": "to",
+      "optout": "Opt-out keywords (comma separated)",
+      "optoutHint": "Only applies to contacts in a reactivation campaign or who got a touch in the last 30 days. The message must be exactly the keyword.",
+      "optoutReply": "Automatic reply to opt-outs"
+    },
+    "contact": {
+      "doNotContact": "Opted out of campaigns",
+      "doNotContactHint": "Excluded from reactivation and broadcasts. Normal conversations keep working.",
+      "sourceOptout": "asked via WhatsApp",
+      "sourceManual": "set manually"
+    }
   }
 }

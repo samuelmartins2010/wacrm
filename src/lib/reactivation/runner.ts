@@ -9,7 +9,6 @@ import type {
   MessageTemplate,
   ReactivationCampaign,
   ReactivationEnrollment,
-  ReactivationParam,
   ReactivationSend,
   ReactivationSettings,
 } from '@/types'
@@ -20,6 +19,7 @@ import {
   isWithinWindow,
   nextDayWindowOpen,
   nextWindowOpen,
+  resolveParams,
   startOfLocalDay,
 } from './rules'
 
@@ -74,22 +74,6 @@ export interface RunResult {
 
 const CLAIM_LEASE_MS = 10 * 60_000
 const MAX_ATTEMPTS = 2
-
-export function resolveParams(params: ReactivationParam[], c: RunnerContact): string[] {
-  const name = c.name?.trim() || ''
-  return params.map((p) => {
-    switch (p.source) {
-      case 'first_name':
-        return name.split(/\s+/)[0] || 'cliente'
-      case 'name':
-        return name || 'cliente'
-      case 'company':
-        return c.company?.trim() || 'cliente'
-      case 'fixed':
-        return p.value
-    }
-  })
-}
 
 export async function runReactivation(deps: RunnerDeps, now: Date): Promise<RunResult> {
   const { store } = deps

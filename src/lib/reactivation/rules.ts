@@ -4,7 +4,7 @@
 // Todas as datas "de calendário" usam America/Sao_Paulo.
 // ============================================================
 
-import type { ReactivationBand, ReactivationSettings, SendWindow } from '@/types'
+import type { ReactivationBand, ReactivationParam, ReactivationSettings, SendWindow } from '@/types'
 import { isRecipientNotAllowedError, isValidE164, sanitizePhoneForMeta } from '@/lib/whatsapp/phone-utils'
 
 export const TIME_ZONE = 'America/Sao_Paulo'
@@ -181,4 +181,24 @@ export function classifySendError(message: string): SendErrorKind {
     return 'template_unavailable'
   }
   return 'retryable'
+}
+
+/** Template body values for a contact; Meta rejects empty params, so blanks fall back to "cliente". */
+export function resolveParams(
+  params: ReactivationParam[],
+  c: { name: string | null; company: string | null },
+): string[] {
+  const name = c.name?.trim() || ''
+  return params.map((p) => {
+    switch (p.source) {
+      case 'first_name':
+        return name.split(/\s+/)[0] || 'cliente'
+      case 'name':
+        return name || 'cliente'
+      case 'company':
+        return c.company?.trim() || 'cliente'
+      case 'fixed':
+        return p.value
+    }
+  })
 }

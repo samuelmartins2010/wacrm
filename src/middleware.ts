@@ -71,7 +71,7 @@ export async function middleware(request: NextRequest) {
 
   // Protected pages - redirect to login if not authenticated.
   const protectedPaths = [
-    '/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts',
+    '/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts', '/reactivation',
     '/automations', '/settings', '/agents', '/flows', '/superadmin',
   ]
   if (!user && protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
@@ -92,7 +92,7 @@ export async function middleware(request: NextRequest) {
   // Skip /suspended and /onboarding (infinite loop guard).
   // Skip /superadmin — super admin is never suspended.
   const crmPages = [
-    '/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts',
+    '/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts', '/reactivation',
     '/automations', '/settings', '/agents', '/flows',
   ]
   const isCrmPage = crmPages.some(p => request.nextUrl.pathname.startsWith(p))
