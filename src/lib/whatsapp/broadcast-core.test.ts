@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { createBroadcast, BroadcastError } from './broadcast-core';
+import { createBroadcast, BroadcastError, excludeOptedOut } from './broadcast-core';
 
 // These assertions all fire in the pure validation prologue, before
 // any Supabase call — a bare stub is enough.
@@ -32,5 +32,18 @@ describe('createBroadcast validation', () => {
     await expect(
       createBroadcast(db, 'acc', 'user', { templateName: 'promo', recipients })
     ).rejects.toMatchObject({ status: 400 });
+  });
+});
+
+describe('excludeOptedOut', () => {
+  it('skips do_not_contact recipients and counts them', () => {
+    const rows = [
+      { contactId: 'a', phone: '+1', params: [] },
+      { contactId: 'b', phone: '+2', params: [] },
+    ];
+    expect(excludeOptedOut(rows, new Set(['b']))).toEqual({
+      kept: [{ contactId: 'a', phone: '+1', params: [] }],
+      optedOut: 1,
+    });
   });
 });

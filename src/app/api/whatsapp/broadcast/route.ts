@@ -175,6 +175,16 @@ export async function POST(request: Request) {
     }
     const templateRow = rawTemplateRow ?? null
 
+    // Contacts who opted out of bulk sends (Reativação "SAIR" or manual).
+    const { data: optedOutRows } = await supabase
+      .from('contacts')
+      .select('phone')
+      .eq('account_id', accountId)
+      .eq('do_not_contact', true)
+    const optedOutPhones = new Set(
+      (optedOutRows ?? []).map((r: { phone: string }) => sanitizePhoneForMeta(r.phone))
+    )
+
     const results: BroadcastResult[] = []
     let sentCount = 0
     let failedCount = 0
@@ -187,6 +197,16 @@ export async function POST(request: Request) {
           phone: recipient.phone,
           status: 'failed',
           error: 'Invalid phone number format',
+        })
+        failedCount++
+        continue
+      }
+
+      if (optedOutPhones.has(sanitized)) {
+        results.push({
+          phone: recipient.phone,
+          status: 'failed',
+          error: 'opted_out',
         })
         failedCount++
         continue
