@@ -112,6 +112,8 @@ export interface Contact {
   do_not_contact?: boolean;
   do_not_contact_at?: string | null;
   do_not_contact_source?: 'reativacao_sair' | 'manual' | null;
+  /** Who last changed do_not_contact (migration 044). */
+  do_not_contact_by?: string | null;
   /** Last message received from this contact (any conversation). */
   last_inbound_at?: string | null;
   created_at: string;

@@ -2210,7 +2210,8 @@
       "doNotContact": "Não quer receber campanhas",
       "doNotContactHint": "Fica fora de reativações e transmissões. Conversas normais continuam funcionando.",
       "sourceOptout": "pediu pelo WhatsApp",
-      "sourceManual": "marcado manualmente"
+      "sourceManual": "marcado manualmente",
+      "onlyAdminUnmark": "Só administradores podem desmarcar."
     }
   }
 }

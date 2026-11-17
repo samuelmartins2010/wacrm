@@ -2210,7 +2210,8 @@
       "doNotContact": "Opted out of campaigns",
       "doNotContactHint": "Excluded from reactivation and broadcasts. Normal conversations keep working.",
       "sourceOptout": "asked via WhatsApp",
-      "sourceManual": "set manually"
+      "sourceManual": "set manually",
+      "onlyAdminUnmark": "Only admins can unmark this."
     }
   }
 }

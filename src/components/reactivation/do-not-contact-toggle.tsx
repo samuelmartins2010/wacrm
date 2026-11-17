@@ -17,13 +17,18 @@ export function DoNotContactToggle({
   onChanged?: (value: boolean) => void;
 }) {
   const t = useTranslations('Reactivation.contact');
-  const canEdit = useCan('edit-settings');
+  // D2: agent+ marca, só admin+ desmarca (o banco reforça, migration 044).
+  const canMark = useCan('send-messages');
+  const canUnmark = useCan('edit-settings');
   const [value, setValue] = useState(!!contact.do_not_contact);
   const [source, setSource] = useState(contact.do_not_contact_source ?? null);
   const [busy, setBusy] = useState(false);
 
+  const [error, setError] = useState<string | null>(null);
+
   async function toggle(next: boolean) {
     setBusy(true);
+    setError(null);
     try {
       await fetchJson(`/api/contacts/${contact.id}/do-not-contact`, {
         method: 'PUT',
@@ -32,12 +37,15 @@ export function DoNotContactToggle({
       setValue(next);
       setSource('manual');
       onChanged?.(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
   }
 
-  if (!value && !canEdit) return null;
+  const canToggle = value ? canUnmark : canMark;
+  if (!value && !canMark) return null;
 
   return (
     <div className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-border px-3 py-2">
@@ -52,11 +60,16 @@ export function DoNotContactToggle({
           )}
         </p>
         <p className="mt-0.5 text-muted-foreground">{t('doNotContactHint')}</p>
+        {value && !canUnmark && (
+          <p className="mt-0.5 text-muted-foreground">{t('onlyAdminUnmark')}</p>
+        )}
+        {error && <p className="mt-0.5 text-red-500">{error}</p>}
       </div>
-      {canEdit && (
+      {(canMark || canUnmark) && (
         <Switch
           checked={value}
-          disabled={busy}
+          disabled={busy || !canToggle}
+          title={!canToggle ? t('onlyAdminUnmark') : undefined}
           onCheckedChange={(v) => toggle(!!v)}
           aria-label={t('doNotContact')}
         />
