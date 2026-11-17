@@ -40,6 +40,7 @@ import {
   LayoutTemplate,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { DoNotContactToggle } from '@/components/reactivation/do-not-contact-toggle';
 
 interface ContactDetailViewProps {
   open: boolean;
@@ -438,6 +439,7 @@ export function ContactDetailView({
                   </div>
                 </div>
               </div>
+              <DoNotContactToggle key={contact.id} contact={contact} />
               <div className="mt-3">
                 <Button
                   size="sm"
