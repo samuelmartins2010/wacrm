@@ -1,4 +1,4 @@
--- 039_reactivation_review_fixes.sql
+-- 042_reactivation_review_fixes.sql
 -- Correções da revisão final da Reativação.
 
 -- 1) Limite diário conta tentativas, não recibos de entrega/leitura:

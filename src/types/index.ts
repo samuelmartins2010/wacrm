@@ -108,7 +108,7 @@ export interface Contact {
   email?: string;
   company?: string;
   avatar_url?: string;
-  /** Opted out of bulk sends (reactivation + broadcasts). Migration 037. */
+  /** Opted out of bulk sends (reactivation + broadcasts). Migration 040. */
   do_not_contact?: boolean;
   do_not_contact_at?: string | null;
   do_not_contact_source?: 'reativacao_sair' | 'manual' | null;
@@ -654,7 +654,7 @@ export interface QuickReply {
 }
 
 // ============================================================
-// Reactivation (migration 037)
+// Reactivation (migration 040)
 // ============================================================
 
 export type ReactivationBand = 'late' | 'cooling' | 'gone';

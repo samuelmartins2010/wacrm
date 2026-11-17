@@ -140,7 +140,7 @@ Em `processMessage` (`src/app/api/whatsapp/webhook/route.ts`), junto de `flagBro
 
 Contagens: público aprovado · enviados por toque · entregues · lidos · **responderam** (e em qual toque) · saíram · falhas (com motivo da Meta) · em andamento. Lista de inscrições com status e link para a conversa.
 
-### 5.7 Dados (migration `037_reactivation.sql`)
+### 5.7 Dados (migration `040_reactivation.sql`)
 
 - `contacts`: `do_not_contact BOOLEAN NOT NULL DEFAULT false`, `do_not_contact_at TIMESTAMPTZ`, `do_not_contact_source TEXT` (`reativacao_sair` | `manual`), `last_inbound_at TIMESTAMPTZ` (com backfill).
 - `reactivation_settings` (1 por conta): faixas (3 ints), `rest_days`, `recent_outbound_days` (padrão 7), `daily_limit`, janela padrão (JSON), `optout_keywords TEXT[]`, `optout_reply TEXT`.

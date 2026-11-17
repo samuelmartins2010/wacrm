@@ -1,4 +1,4 @@
--- 037_reactivation.sql
+-- 040_reactivation.sql
 -- Reativação de contatos inativos (docs/superpowers/specs/2026-11-17-reativacao-design.md).
 -- Safe to run multiple times (IF NOT EXISTS / idempotent DDL).
 

@@ -1,4 +1,4 @@
--- 038_reactivation_candidates.sql
+-- 041_reactivation_candidates.sql
 -- Uma linha por contato que já mandou mensagem, com o que a
 -- elegibilidade da reativação precisa (spec 5.2). SECURITY INVOKER:
 -- chamada pelo cliente do usuário, o RLS das tabelas vale; pelo

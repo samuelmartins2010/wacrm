@@ -27,7 +27,7 @@ Modelo de entrada:
   - A sequência para quando o contato responde. "SAIR"/"PARAR"/"STOP" (só para quem está numa campanha ou recebeu toque nos últimos 30 dias) marca "Não quer receber campanhas" e responde com uma confirmação.
   - "Não quer receber campanhas" também exclui o contato das **Transmissões** (painel e API v1). Na ficha do contato aparece um selo, e o admin pode marcar/desmarcar.
   - Relatório por campanha: público, enviados, entregues, lidos, responderam, saíram, falhas, voltaram sozinhos.
-- **Banco (migrations):** `037_reactivation.sql` (colunas `do_not_contact*` e `last_inbound_at` em `contacts`, com backfill; tabelas `reactivation_settings`, `reactivation_campaigns`, `reactivation_enrollments`, `reactivation_sends`; RLS), `038_reactivation_candidates.sql` (função `reactivation_candidates`) e `039_reactivation_review_fixes.sql` (`attempted_at` para o limite diário; exclusão de "envio recente" passa a contar transmissões).
+- **Banco (migrations):** `040_reactivation.sql` (colunas `do_not_contact*` e `last_inbound_at` em `contacts`, com backfill; tabelas `reactivation_settings`, `reactivation_campaigns`, `reactivation_enrollments`, `reactivation_sends`; RLS), `041_reactivation_candidates.sql` (função `reactivation_candidates`) e `042_reactivation_review_fixes.sql` (`attempted_at` para o limite diário; exclusão de "envio recente" passa a contar transmissões).
 - **Revisão final:** revisor independente encontrou 0 críticos e 6 importantes, todos corrigidos com teste (envio duplicado após erro de banco, recibos consumindo o limite diário, corrida ao aprovar, transmissões fora da exclusão, checagem de opt-out dos broadcasts que deixava passar em erro, rechecagem com dados velhos). 7 pontos menores ficaram anotados para depois.
 - **Arquivos principais:** `src/lib/reactivation/*` (regras, consultas, runner, webhook), `src/app/api/reactivation/*`, `src/app/(dashboard)/reactivation/*`, `src/components/reactivation/*`, ganchos em `src/app/api/whatsapp/webhook/route.ts` e nas rotas de broadcast.
 - **Como testar (local):** `REACTIVATION_DRY_RUN=true` no `.env.development.local` → criar campanha em Reativação → `curl -H "x-cron-secret: <AUTOMATION_CRON_SECRET>" localhost:3000/api/reactivation/cron`. Testado ponta a ponta em 17/11/2026 com 4 contatos de teste (envio, resposta, SAIR dentro e fora de campanha, encerramento automático, relatório, selo na ficha). 756/756 testes, typecheck e build ok.
@@ -48,6 +48,6 @@ Modelo de entrada:
 
 ## 2026-11-17: Ambiente de desenvolvimento local
 - **O que mudou:** dev 100% local. Docker via Colima, Supabase via `npx supabase`, `.env.development.local` apontando pro Supabase local. Produção (VPS + Supabase cloud) continua pausada de propósito.
-- **Como subir:** `colima start --cpu 4 --memory 4` → `npx supabase start -x vector,logflare,imgproxy,supavisor,edge-runtime` → `npm run dev` → http://localhost:3000 (login `admin@clientizza.local` / `clientizza123`).
+- **Como subir:** `colima start --cpu 4 --memory 4` → `npx supabase start -x vector,logflare,imgproxy,supavisor,edge-runtime` → `npm run dev` → http://localhost:3000 (login de teste: ver anotações locais, não versionado).
 - **Arquivos:** `supabase/config.toml` (não commitado), `.env.development.local` (ignorado pelo git).
 - **Pendências / riscos:** WhatsApp real não funciona local sem túnel (ngrok/cloudflared).

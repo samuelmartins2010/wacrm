@@ -4,7 +4,7 @@
 
 **Goal:** Módulo "Reativação" no Clientizza. Lista contatos inativos por faixa e roda campanhas de até 3 toques por template. A campanha é aprovada antes de começar, para quando o contato responde e respeita o opt-out "SAIR".
 
-**Architecture:** Migration 037 cria as tabelas `reactivation_*` e colunas novas em `contacts`. As regras puras ficam em `src/lib/reactivation/` (testadas). As rotas `src/app/api/reactivation/*` usam `requireRole`. O cron `GET /api/reactivation/cron` envia via `engineSendTemplate`, que já grava no inbox como `bot`. O webhook ganha ganchos de resposta/saída e de status. As telas ficam em `src/app/(dashboard)/reactivation/`.
+**Architecture:** migration 040 cria as tabelas `reactivation_*` e colunas novas em `contacts`. As regras puras ficam em `src/lib/reactivation/` (testadas). As rotas `src/app/api/reactivation/*` usam `requireRole`. O cron `GET /api/reactivation/cron` envia via `engineSendTemplate`, que já grava no inbox como `bot`. O webhook ganha ganchos de resposta/saída e de status. As telas ficam em `src/app/(dashboard)/reactivation/`.
 
 **Tech Stack:** Next.js 16 (ler `node_modules/next/dist/docs/` antes de rotas/páginas, ver `AGENTS.md`), Supabase (RLS `is_account_member`), next-intl, Vitest, Tailwind + componentes `src/components/ui/*`.
 
@@ -32,10 +32,10 @@
 
 ---
 
-### Task 1: Migration 037 + tipos
+### Task 1: migration 040 + tipos
 
 **Files:**
-- Create: `supabase/migrations/037_reactivation.sql`
+- Create: `supabase/migrations/040_reactivation.sql`
 - Modify: `src/types/index.ts` (append ao fim)
 
 **Interfaces:**
@@ -50,10 +50,10 @@
   - Índices da spec 5.7.
   - RLS conforme Global Constraints. `reactivation_enrollments`/`reactivation_sends`: só SELECT para `agent`, sem políticas de escrita.
   - Use `IF NOT EXISTS` / `DROP POLICY IF EXISTS`, como as migrations 027/036.
-- [ ] **Step 3: Aplicar.** `npx supabase migration up`. Esperado: `Applying migration 037_reactivation.sql...` sem erro.
+- [ ] **Step 3: Aplicar.** `npx supabase migration up`. Esperado: `Applying migration 040_reactivation.sql...` sem erro.
 - [ ] **Step 4: Conferir.** `docker exec supabase_db_wacrm psql -U postgres -c "\d reactivation_enrollments"` lista as colunas e os dois UNIQUE. `select count(*) from contacts where last_inbound_at is not null` ≥ 0 sem erro.
 - [ ] **Step 5: Tipos** em `src/types/index.ts`; `npm run typecheck` limpo.
-- [ ] **Step 6: Commit.** `git add supabase/migrations/037_reactivation.sql src/types/index.ts && git commit -m "feat(reativacao): migration 037 e tipos"`
+- [ ] **Step 6: Commit.** `git add supabase/migrations/040_reactivation.sql src/types/index.ts && git commit -m "feat(reativacao): migration 040 e tipos"`
 
 ### Task 2: Regras puras
 
