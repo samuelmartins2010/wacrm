@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
 import type {
   MessageTemplate,
   ReactivationCampaign,
@@ -112,7 +112,9 @@ class MemStore implements RunnerStore {
   async countSendsSince(_accountId: string, sinceIso: string) {
     return this.sends.filter((s) => s.updated_at >= sinceIso).length
   }
+  claimedUntil = new Map<string, string>()
   async claim(id: string, expected: string, nextRunAt: string) {
+    this.claimedUntil.set(id, nextRunAt)
     const e = this.enrollments.get(id)!
     if (e.next_run_at !== expected) return false
     e.next_run_at = nextRunAt
@@ -487,5 +489,26 @@ describe('runReactivation', () => {
     expect(r.sent).toBe(1)
     expect(r.skipped).toBe(1)
     expect(store.campaigns.get('camp')!.status).toBe('active')
+  })
+
+  describe('claim lease counts from the claim, not from the start of the run', () => {
+    afterEach(() => vi.useRealTimers())
+
+    it('an enrollment claimed 7:59 into the run is locked until ~17:59', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      const runStart = new Date('2026-11-17T13:00:00.000Z')
+      vi.setSystemTime(runStart)
+      const { store, send, deps } = setup()
+      store.addEnrollment('e1')
+      store.addEnrollment('e2', { next_run_at: new Date(NOW.getTime() + 1).toISOString() })
+      // The first send takes 7:59 of wall-clock time.
+      send.mockImplementationOnce(async () => {
+        vi.setSystemTime(new Date(runStart.getTime() + (7 * 60 + 59) * 1000))
+        return { whatsapp_message_id: 'w1' }
+      })
+      await runReactivation(deps, new Date(NOW.getTime() + 1))
+      expect(store.claimedUntil.get('e1')).toBe('2026-11-17T13:10:00.001Z')
+      expect(store.claimedUntil.get('e2')).toBe('2026-11-17T13:17:59.001Z')
+    })
   })
 })

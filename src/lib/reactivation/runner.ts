@@ -154,10 +154,14 @@ async function runLocked(deps: RunnerDeps, now: Date): Promise<RunResult> {
     }
 
     // 3. Claim.
+    // The lease counts from the moment of the claim (run start + time
+    // already spent in this run), so items claimed late in a long run
+    // keep the full CLAIM_LEASE_MS.
+    const claimedAt = now.getTime() + (Date.now() - startedAt)
     const claimed = await store.claim(
       e.id,
       e.next_run_at!,
-      new Date(now.getTime() + CLAIM_LEASE_MS).toISOString(),
+      new Date(claimedAt + CLAIM_LEASE_MS).toISOString(),
     )
     if (!claimed) {
       result.skipped++
