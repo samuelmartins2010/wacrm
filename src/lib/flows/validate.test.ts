@@ -598,3 +598,25 @@ describe("cycles that never wait for the customer (F1)", () => {
     ).toHaveLength(0);
   });
 });
+
+describe("collect_input regex validation at save (D9)", () => {
+  const flow = { name: "f", trigger_type: "keyword" as const, trigger_config: { keywords: ["x"] }, entry_node_id: "start" };
+  const withAsk = (cfg: Record<string, unknown>) => [
+    { node_key: "start", node_type: "start", config: { next_node_key: "ask" } },
+    { node_key: "ask", node_type: "collect_input", config: { prompt_text: "?", var_key: "x", next_node_key: "fim", ...cfg } },
+    { node_key: "fim", node_type: "end", config: {} },
+  ];
+  const errors = (cfg: Record<string, unknown>) =>
+    validateFlowForActivation(flow, withAsk(cfg)).filter((i) => i.severity === "error");
+
+  it("regex validation needs a pattern", () => {
+    expect(errors({ validation: "regex" })[0]?.message).toMatch(/regular expression/i);
+  });
+  it("an invalid pattern is rejected", () => {
+    expect(errors({ validation: "regex", regex: "[" })[0]?.message).toMatch(/invalid/i);
+  });
+  it("email / phone need nothing else", () => {
+    expect(errors({ validation: "email" })).toHaveLength(0);
+    expect(errors({ validation: "phone" })).toHaveLength(0);
+  });
+});

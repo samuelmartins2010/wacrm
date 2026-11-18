@@ -1166,7 +1166,14 @@
         "removeSectionAria": "Remove section",
         "fileUploaded": "File uploaded.",
         "uploadFailed": "Upload failed.",
-        "fileTooLarge": "File is {size} MB — limit is 16 MB."
+        "fileTooLarge": "File is {size} MB — limit is 16 MB.",
+        "validationLabel": "Validate answer",
+        "validationAny": "Any text",
+        "validationEmail": "Email",
+        "validationPhone": "Phone",
+        "validationRegex": "Regular expression",
+        "regexLabel": "Regular expression",
+        "regexHelp": "If the answer does not match, the question is asked again (up to the flow retry limit)."
       },
       "categories": {
         "messaging": "Messaging",
@@ -1293,7 +1300,9 @@
         "setTagNeedsNext": "Set-tag must point to a next node.",
         "setTagPointsToMissing": "Set-tag points to non-existent node \"{key}\".",
         "unknownNodeType": "Unknown node type \"{type}\".",
-        "cycleWithoutWait": "Loop that never waits for the customer: {path}. Add a node that waits for a reply (buttons, list or collect input)."
+        "cycleWithoutWait": "Loop that never waits for the customer: {path}. Add a node that waits for a reply (buttons, list or collect input).",
+        "collectInputRegexMissing": "Regex validation needs a regular expression.",
+        "collectInputRegexInvalid": "The regular expression is invalid."
       }
     },
     "editorState": {

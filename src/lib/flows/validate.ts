@@ -34,6 +34,7 @@
  */
 
 import { INTERACTIVE_LIMITS } from "@/lib/whatsapp/meta-api";
+import { regexProblem } from "./collect-validation";
 
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
@@ -740,6 +741,27 @@ function validateNode(
             ? t("collectInputPointsToMissing", { key: cfg.next_node_key })
             : `Collect-input points to non-existent node "${cfg.next_node_key}".`,
         });
+      }
+      // D9: a regex validation needs a pattern that compiles.
+      const vcfg = node.config as { validation?: string; regex?: string };
+      if (vcfg.validation === "regex") {
+        const problem = regexProblem(vcfg.regex);
+        if (problem) {
+          issues.push({
+            severity: "error",
+            scope: "node",
+            node_key: node.node_key,
+            field: "regex",
+            message:
+              problem === "missing"
+                ? t
+                  ? t("collectInputRegexMissing")
+                  : "Regex validation needs a regular expression."
+                : t
+                  ? t("collectInputRegexInvalid")
+                  : "The regular expression is invalid.",
+          });
+        }
       }
       break;
     }

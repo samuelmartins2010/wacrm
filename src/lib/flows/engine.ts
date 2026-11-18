@@ -40,6 +40,7 @@ import {
   engineSendText,
 } from "./meta-send";
 import { decideFallback, resolveFallbackPolicy } from "./fallback";
+import { isValidCollectedInput } from "./collect-validation";
 import {
   type CollectInputNodeConfig,
   type ConditionNodeConfig,
@@ -984,7 +985,9 @@ async function handleReplyForActiveRun(
   ) {
     const cfg = currentNode.config as unknown as CollectInputNodeConfig;
     const captured = message.text.trim();
-    if (captured.length > 0 && cfg.var_key) {
+    // D9: an answer that fails the node's validation does not match;
+    // it falls through to the fallback policy (re-ask, then handoff).
+    if (captured.length > 0 && cfg.var_key && isValidCollectedInput(captured, cfg)) {
       // Persist captured value + reset reprompt count atomically.
       const newVars = { ...run.vars, [cfg.var_key]: captured };
       const { error: capErr } = await db

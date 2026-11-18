@@ -163,6 +163,35 @@ export function NodeConfigForm({
               .
             </p>
           </div>
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">
+              {t("validationLabel")}
+            </label>
+            <Select
+              value={(cfg as { validation?: string }).validation ?? "any"}
+              onValueChange={(v) => onUpdateConfig({ validation: v })}
+            >
+              <SelectTrigger className="bg-muted">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">{t("validationAny")}</SelectItem>
+                <SelectItem value="email">{t("validationEmail")}</SelectItem>
+                <SelectItem value="phone">{t("validationPhone")}</SelectItem>
+                <SelectItem value="regex">{t("validationRegex")}</SelectItem>
+              </SelectContent>
+            </Select>
+            {(cfg as { validation?: string }).validation === "regex" && (
+              <Input
+                value={(cfg as { regex?: string }).regex ?? ""}
+                onChange={(e) => onUpdateConfig({ regex: e.target.value })}
+                placeholder="^[A-Z]{2}-\d{4}$"
+                aria-label={t("regexLabel")}
+                className="mt-2 bg-muted font-mono text-xs"
+              />
+            )}
+            <p className="mt-1 text-[10px] text-muted-foreground">{t("regexHelp")}</p>
+          </div>
           <NextNodeRow
             value={(cfg as { next_node_key?: string }).next_node_key ?? ""}
             allNodes={allNodes}

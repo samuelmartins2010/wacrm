@@ -72,3 +72,35 @@ describe("reply on a node that no longer exists (D8)", () => {
     expect(writes.conversationUpdates.at(-1)).toMatchObject({ status: "pending" });
   });
 });
+
+describe("collect_input validation in the runner (D9)", () => {
+  const { handleReplyForActiveRun } = __flowEngineTest;
+  const nodes = nodeMap(
+    node("ask", "collect_input", { prompt_text: "Seu e-mail?", var_key: "email", validation: "email", next_node_key: "ok" }),
+    node("ok", "send_message", { text: "Obrigado {{vars.email}}", next_node_key: "fim" }),
+    node("fim", "end", {}),
+  );
+  const reply = (text: string) => ({ kind: "text", text, meta_message_id: `wamid.${text}` }) as never;
+
+  it("an invalid answer re-sends the question instead of capturing it", async () => {
+    const { db, writes } = fakeFlowDb({ flows: { fallback_policy: { on_unknown_reply: "reprompt", max_reprompts: 2, on_timeout_hours: 24, on_exhaust: "handoff" } } });
+    const r = await handleReplyForActiveRun(db as never, run({ current_node_key: "ask" }), reply("Carla"), nodes);
+    expect(r.outcome).toBe("fallback_fired");
+    expect(sent.map((s) => s.args.text)).toEqual(["Seu e-mail?"]);
+    expect(writes.runUpdates.some((u) => "vars" in u)).toBe(false);
+  });
+
+  it("after the reprompts are used up it hands off", async () => {
+    const { db, writes } = fakeFlowDb({ flows: { fallback_policy: { on_unknown_reply: "reprompt", max_reprompts: 2, on_timeout_hours: 24, on_exhaust: "handoff" } } });
+    const r = await handleReplyForActiveRun(db as never, run({ current_node_key: "ask", reprompt_count: 2 }), reply("ainda não"), nodes);
+    expect(r.outcome).toBe("handed_off");
+    expect(writes.runUpdates.at(-1)).toMatchObject({ status: "handed_off" });
+  });
+
+  it("a valid answer is captured and the flow advances", async () => {
+    const { db, writes } = fakeFlowDb();
+    await handleReplyForActiveRun(db as never, run({ current_node_key: "ask" }), reply("ana@empresa.com"), nodes);
+    expect(writes.runUpdates.some((u) => (u.vars as Record<string, unknown> | undefined)?.email === "ana@empresa.com")).toBe(true);
+    expect(sent.map((s) => s.args.text)).toEqual(["Obrigado ana@empresa.com"]);
+  });
+});
