@@ -557,12 +557,15 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       // runAutomationsForTrigger.
       const cfg = step.step_config as TagStepConfig
       if (!args.contactId || !cfg.tag_id) throw new Error('add_tag needs contact + tag_id')
-      await db
+      // A6: the tag must exist in this account.
+      await requireRow('tags', { id: cfg.tag_id, account_id: args.automation.account_id }, 'add_tag: tag not found in this account')
+      const { error: tagErr } = await db
         .from('contact_tags')
         .upsert(
           { contact_id: args.contactId, tag_id: cfg.tag_id },
           { onConflict: 'contact_id,tag_id', ignoreDuplicates: true },
         )
+      if (tagErr) throw new Error(`add_tag failed: ${tagErr.message}`)
       return `tag ${cfg.tag_id} added`
     }
 
@@ -571,11 +574,12 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       // ownership guard, since contact_tags carries no account_id.
       const cfg = step.step_config as TagStepConfig
       if (!args.contactId || !cfg.tag_id) throw new Error('remove_tag needs contact + tag_id')
-      await db
+      const { error: rmErr } = await db
         .from('contact_tags')
         .delete()
         .eq('contact_id', args.contactId)
         .eq('tag_id', cfg.tag_id)
+      if (rmErr) throw new Error(`remove_tag failed: ${rmErr.message}`)
       return `tag ${cfg.tag_id} removed`
     }
 
@@ -594,12 +598,23 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
           .limit(1)
         agentId = profiles?.[0]?.user_id
       }
-      if (!agentId) return 'no agent resolved'
-      await db
+      if (!agentId) throw new Error('assign_conversation: no agent resolved')
+      // A6: only a member of this account can be assigned.
+      await requireRow(
+        'profiles',
+        { user_id: agentId, account_id: args.automation.account_id },
+        'assign_conversation: agent is not a member of this account',
+      )
+      const { data: assigned, error: assignErr } = await db
         .from('conversations')
         .update({ assigned_agent_id: agentId })
         .eq('account_id', args.automation.account_id)
         .eq('contact_id', args.contactId)
+        .select('id')
+      if (assignErr) throw new Error(`assign_conversation failed: ${assignErr.message}`)
+      if (!assigned || (assigned as unknown[]).length === 0) {
+        throw new Error('assign_conversation: no conversation for this contact')
+      }
       return `assigned to ${agentId}`
     }
 
@@ -615,7 +630,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       if (cfg.field.startsWith('custom:')) {
         const customFieldId = cfg.field.slice('custom:'.length)
         if (!customFieldId) {
-          return `field ${cfg.field} not writable from automations`
+          throw new Error(`update_contact_field: field ${cfg.field} not writable from automations`)
         }
         // Defense in depth: the service-role client bypasses RLS, so confirm
         // the field definition belongs to this account before writing.
@@ -626,38 +641,55 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
           .eq('account_id', args.automation.account_id)
           .maybeSingle()
         if (!field) {
-          return `field ${cfg.field} not writable from automations`
+          throw new Error(`update_contact_field: field ${cfg.field} not writable from automations`)
         }
         // Upsert on the table's UNIQUE(contact_id, custom_field_id) so repeated
         // runs overwrite rather than duplicate. Tenancy is enforced above and,
         // for the contact side, by the entry-point ownership guard.
-        await db
+        const { error: cfErr } = await db
           .from('contact_custom_values')
           .upsert(
             { contact_id: args.contactId, custom_field_id: customFieldId, value },
             { onConflict: 'contact_id,custom_field_id' },
           )
+        if (cfErr) throw new Error(`update_contact_field failed: ${cfErr.message}`)
         return `custom field updated`
       }
 
       const allowed = new Set(['name', 'email', 'company'])
       if (!allowed.has(cfg.field)) {
-        return `field ${cfg.field} not writable from automations`
+        throw new Error(`update_contact_field: field ${cfg.field} not writable from automations`)
       }
       // Defense in depth: scope the service-role write to the account so
       // a future caller that skips the entry-point ownership guard still
       // cannot write across tenants.
-      await db
+      const { data: updatedRows, error: upErr } = await db
         .from('contacts')
         .update({ [cfg.field]: value, updated_at: new Date().toISOString() })
         .eq('id', args.contactId)
         .eq('account_id', args.automation.account_id)
+        .select('id')
+      if (upErr) throw new Error(`update_contact_field failed: ${upErr.message}`)
+      if (!updatedRows || (updatedRows as unknown[]).length === 0) {
+        throw new Error('update_contact_field: contact not found')
+      }
       return `${cfg.field} updated`
     }
 
     case 'create_deal': {
       const cfg = step.step_config as CreateDealStepConfig
       if (!cfg.pipeline_id || !cfg.stage_id) throw new Error('create_deal needs pipeline + stage')
+      // A6: pipeline from this account, stage from that pipeline.
+      await requireRow(
+        'pipelines',
+        { id: cfg.pipeline_id, account_id: args.automation.account_id },
+        'create_deal: pipeline not found in this account',
+      )
+      await requireRow(
+        'pipeline_stages',
+        { id: cfg.stage_id, pipeline_id: cfg.pipeline_id },
+        'create_deal: stage does not belong to this pipeline',
+      )
       // Match the account's configured default currency rather than
       // the static `deals.currency` DB default — keeps automation-
       // created deals consistent with the one-currency-per-account
@@ -668,7 +700,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         .select('default_currency')
         .eq('id', args.automation.account_id)
         .maybeSingle()
-      await db.from('deals').insert({
+      const { error: dealErr } = await db.from('deals').insert({
         // Tenancy + audit, same split as automation_logs above.
         account_id: args.automation.account_id,
         user_id: args.automation.user_id,
@@ -680,6 +712,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         currency: acct?.default_currency ?? 'USD',
         status: 'open',
       })
+      if (dealErr) throw new Error(`create_deal failed: ${dealErr.message}`)
       return 'deal created'
     }
 
@@ -726,6 +759,15 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
 // ------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------
+
+/** A6: throw `message` unless a row matching `match` exists in `table`. */
+async function requireRow(table: string, match: Record<string, string>, message: string): Promise<void> {
+  let q = supabaseAdmin().from(table).select('id')
+  for (const [k, v] of Object.entries(match)) q = q.eq(k, v)
+  const { data, error } = await q.limit(1)
+  if (error) throw new Error(`${message} (${error.message})`)
+  if (!data || (data as unknown[]).length === 0) throw new Error(message)
+}
 
 /**
  * Pick the conversation a send-type step should use. Prefer the id the

@@ -218,3 +218,67 @@ describe("A5: an error inside a condition branch stops the run as failed", () =>
     expect(logs()[0].error_message).toMatch(/empty text/);
   });
 });
+
+describe("A6: write steps check what they wrote", () => {
+  const one = (type: string, cfg: Record<string, unknown>) => [step("x", 0, type, cfg), step("d", 1, "send_message", { text: "depois" })];
+  const run = async (type: string, cfg: Record<string, unknown>, extra: Record<string, Record<string, unknown>[]> = {}) => {
+    seed([automation()], one(type, cfg));
+    Object.assign(db.tables, {
+      tags: [{ id: "tag-ok", account_id: ACC }, { id: "tag-other", account_id: "other" }],
+      pipelines: [{ id: "p-ok", account_id: ACC }, { id: "p-other", account_id: "other" }],
+      pipeline_stages: [{ id: "s-ok", pipeline_id: "p-ok" }, { id: "s-other", pipeline_id: "p-other" }],
+      profiles: [{ user_id: "agent-ok", account_id: ACC }, { user_id: "agent-other", account_id: "other" }],
+      conversations: [{ id: "conv1", account_id: ACC, contact_id: CONTACT }],
+      contact_tags: [],
+      deals: [],
+      accounts: [{ id: ACC, default_currency: "BRL" }],
+      ...extra,
+    });
+    await fire();
+    return logs()[0];
+  };
+
+  it("add_tag with a tag that does not exist in the account → failed", async () => {
+    const log = await run("add_tag", { tag_id: "tag-other" });
+    expect(log.status).toBe("failed");
+    expect(log.error_message).toMatch(/tag not found/);
+    expect(db.tables.contact_tags).toHaveLength(0);
+    expect(h.sent).toEqual([]);
+  });
+  it("add_tag with a valid tag → tagged", async () => {
+    const log = await run("add_tag", { tag_id: "tag-ok" });
+    expect(log.status).toBe("success");
+    expect(db.tables.contact_tags).toHaveLength(1);
+  });
+  it("assign_conversation to someone outside the account → failed", async () => {
+    const log = await run("assign_conversation", { mode: "specific", agent_id: "agent-other" });
+    expect(log.status).toBe("failed");
+    expect(log.error_message).toMatch(/agent is not a member/);
+    expect(db.tables.conversations[0].assigned_agent_id).toBeUndefined();
+  });
+  it("assign_conversation without a conversation → failed", async () => {
+    const log = await run("assign_conversation", { mode: "specific", agent_id: "agent-ok" }, { conversations: [] });
+    expect(log.status).toBe("failed");
+    expect(log.error_message).toMatch(/no conversation/);
+  });
+  it("assign_conversation to a member → assigned", async () => {
+    const log = await run("assign_conversation", { mode: "specific", agent_id: "agent-ok" });
+    expect(log.status).toBe("success");
+    expect(db.tables.conversations[0].assigned_agent_id).toBe("agent-ok");
+  });
+  it("create_deal with a pipeline from another account → failed", async () => {
+    const log = await run("create_deal", { pipeline_id: "p-other", stage_id: "s-other", title: "x" });
+    expect(log.status).toBe("failed");
+    expect(log.error_message).toMatch(/pipeline not found/);
+    expect(db.tables.deals).toHaveLength(0);
+  });
+  it("create_deal with a stage of another pipeline → failed", async () => {
+    const log = await run("create_deal", { pipeline_id: "p-ok", stage_id: "s-other", title: "x" });
+    expect(log.error_message).toMatch(/stage does not belong/);
+  });
+  it("update_contact_field on a non-writable field → failed (not a silent success)", async () => {
+    const log = await run("update_contact_field", { field: "phone", value: "1" });
+    expect(log.status).toBe("failed");
+    expect(log.error_message).toMatch(/not writable/);
+  });
+});
