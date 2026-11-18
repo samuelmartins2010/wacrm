@@ -341,7 +341,10 @@
       "toastExported": "{count} contact exported",
       "toastExported_plural": "{count} contacts exported",
       "toastExportEmpty": "No contacts to export",
-      "toastExportFailed": "Failed to export contacts"
+      "toastExportFailed": "Failed to export contacts",
+      "tagSelected": "Tag",
+      "toastBulkTagged": "Tag applied to {count} contact(s). Tag automations do not fire for bulk operations.",
+      "toastBulkTagFailed": "Could not apply the tag."
     },
     "form": {
       "addTitle": "Add Contact",

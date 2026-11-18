@@ -341,7 +341,10 @@
       "toastExported": "{count} contato exportado",
       "toastExported_plural": "{count} contatos exportados",
       "toastExportEmpty": "Nenhum contato para exportar",
-      "toastExportFailed": "Falha ao exportar contatos"
+      "toastExportFailed": "Falha ao exportar contatos",
+      "tagSelected": "Etiquetar",
+      "toastBulkTagged": "Etiqueta aplicada a {count} contato(s). Automações de etiqueta não disparam em operações em massa.",
+      "toastBulkTagFailed": "Não foi possível aplicar a etiqueta."
     },
     "form": {
       "addTitle": "Adicionar contato",

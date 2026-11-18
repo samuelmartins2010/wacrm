@@ -128,10 +128,11 @@ export async function assignImportedContactTags(
 
   for (let i = 0; i < rows.length; i += chunkSize) {
     const chunk = rows.slice(i, i + chunkSize);
-    const { error } = await supabase.from('contact_tags').upsert(chunk, {
-      onConflict: 'contact_id,tag_id',
-      ignoreDuplicates: true,
-    });
+    // D10: an import is a bulk operation — it goes through the function
+    // that switches tag_added events off for its own transaction
+    // (migration 056), so importing 5,000 tagged contacts does not fire
+    // 5,000 automations. Duplicates are ignored there too.
+    const { error } = await supabase.rpc('contact_tags_insert_bulk', { p_rows: chunk });
     if (error) throw error;
     assigned += chunk.length;
   }

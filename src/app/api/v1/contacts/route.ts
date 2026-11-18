@@ -130,7 +130,8 @@ export async function POST(request: Request) {
         ctx.accountId,
         auditUserId,
         id,
-        body.tags.filter((t): t is string => typeof t === 'string')
+        body.tags.filter((t): t is string => typeof t === 'string'),
+        { bulk: true } // D10: creating/importing contacts does not fire tag_added
       );
     }
 
