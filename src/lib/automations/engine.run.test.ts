@@ -108,3 +108,25 @@ describe("A1: one execution per automation and contact", () => {
     expect(pendings().filter((p) => p.status === "pending")).toHaveLength(1);
   });
 });
+
+describe("A2: a deactivated or deleted automation does not resume", () => {
+  it("deactivated during the wait → pending cancelled, log says why", async () => {
+    seed([automation()], waitFlow);
+    await fire();
+    db.tables.automations[0].is_active = false;
+    await resumeDue();
+    expect(h.sent).toEqual(["um"]);
+    expect(pendings()[0].status).toBe("cancelled");
+    expect(logs()[0].status).toBe("cancelled");
+    expect(JSON.stringify(logs()[0].steps_executed)).toMatch(/automation is no longer active/);
+  });
+
+  it("deleted during the wait → pending cancelled", async () => {
+    seed([automation()], waitFlow);
+    await fire();
+    db.tables.automations = [];
+    await resumeDue();
+    expect(h.sent).toEqual(["um"]);
+    expect(pendings()[0].status).toBe("cancelled");
+  });
+});

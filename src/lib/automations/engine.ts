@@ -140,11 +140,24 @@ export async function resumePendingExecution(pending: {
     .from('automations')
     .select('*')
     .eq('id', pending.automation_id)
-    .single()
+    .maybeSingle()
 
-  if (error || !automation) {
-    console.error('[automations] resume: missing automation', pending.automation_id, error)
+  if (error) {
+    console.error('[automations] resume: lookup failed', pending.automation_id, error)
     await markPending(pending.id, 'failed')
+    return
+  }
+  // A2: deleted or switched off while this run was waiting → it does not
+  // resume. Cancel the pending step and say why on the run's log.
+  if (!automation || !(automation as Automation).is_active) {
+    const why = automation ? 'automation is no longer active' : 'automation was deleted'
+    await markPending(pending.id, 'cancelled')
+    await appendResults(
+      pending.log_id,
+      [{ step_id: pending.id, step_type: 'wait', status: 'skipped', detail: `not resumed: ${why}` }],
+      'cancelled',
+      null,
+    )
     return
   }
 
@@ -830,7 +843,7 @@ async function finalizeLog(
     .eq('id', logId)
 }
 
-async function markPending(id: string, status: 'done' | 'failed') {
+async function markPending(id: string, status: 'done' | 'failed' | 'cancelled') {
   await supabaseAdmin()
     .from('automation_pending_executions')
     .update({ status })
