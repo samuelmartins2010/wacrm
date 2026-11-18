@@ -18,6 +18,23 @@ Modelo de entrada:
 
 ---
 
+## 2026-11-18: Operações em massa sem gatilho (D10), toque adiado em fluxo (D11) e replay das migrations
+- **Origem:** pedido do Samuel após as correções de Automações e Fluxos.
+- **Decisões:**
+  - **D10:** operações em massa NÃO geram `tag_added`/`conversation_assigned`: importação de contatos (CSV ou API), etiqueta aplicada a vários contatos de uma vez e atribuição em lote. Só mudanças individuais disparam.
+  - **D11:** o runner da Reativação adia o toque (para a próxima rodada) enquanto o contato tiver `flow_run` ativo, na rechecagem que já existia antes do envio.
+- **O que mudou:**
+  - `477988a` (D10): migration 056 — os triggers da 055 respeitam `app.automation_events='off'`, ligado só dentro da transação pelas funções `contact_tags_insert_bulk` (importação), `contacts_bulk_add_tag` (lote) e `conversations_bulk_assign` (lote; ainda sem tela). Importação CSV e `POST /api/v1/contacts` gravam etiquetas pela função de massa; `PATCH /api/v1/contacts/[id]`, a ficha, o formulário, fluxos e automações continuam disparando. Nova ação **Etiquetar** na barra de seleção de Contatos (antes só havia excluir).
+  - `9df736c` (D11): `hasActiveFlowRun` no store do runner; com fluxo ativo a inscrição volta a vencer na próxima rodada.
+  - `0de6c71`: `docs/deploy-migrations-040-055.md` — ordem, verificação por migration (040–056) e plano se falhar.
+- **Banco (migrations):** 056_automation_events_bulk_silent.
+- **Replay feito (18/11/2026):** `pg_dump` completo em `~/Developer/wacrm-secrets/local-backup-2026-11-18.sql` (+ dump só de dados `local-data-2026-11-18.sql`, ambos 600); `npx supabase db reset` aplicou 001→056 em ordem sem erro; `supabase test db` passou no banco novo (58 asserts); dados restaurados (admin local, 4 contatos aaaaaaaa, template volta_cliente) e login confirmado por sessão real do Supabase Auth.
+- **Como foi testado:** vitest 933/933, pgTAP 58, tsc e build ok. Ponta a ponta (proxy da Meta, crons via curl): 40 importados pelo código do import-modal + 10 pela API v1 + 50 em lote com a etiqueta T e automação `tag_added(T)` ativa → 0 eventos, 0 execuções; T em 1 contato pela ficha → 1 execução; loop A7 L1→L2→L3 continua cortado na profundidade 2. D11: contato no menu do fluxo + toque devido → adiado, nada enviado; fluxo encerrado (tempo esgotado) → toque saiu na rodada seguinte (dry-run).
+- **Pendências / riscos:**
+  - Se o contato termina o fluxo **respondendo**, essa resposta conta como "voltou antes do envio" e o toque é cancelado (regra já existente da Reativação). O toque só sai depois de um fluxo que termina sem resposta do cliente (tempo esgotado, handoff, etc.).
+  - Atribuição em lote não tem tela; a função `conversations_bulk_assign` já respeita o D10.
+  - API v1 não tem rota de etiqueta em lote; `POST` (criar/importar) não dispara, `PATCH` dispara.
+
 ## 2026-11-18: Correções de Automações e Fluxos
 - **Origem:** auditorias de Automações e de Fluxos (17/11) + decisões de produto do Samuel (D3–D9).
 - **Decisões de produto:**
@@ -44,11 +61,11 @@ Modelo de entrada:
 - **Arquivos principais:** `src/lib/flows/{engine,validate,save,collect-validation,vars,delivery,run-dates}.ts`, `src/lib/automations/{engine,references,duplicates,ping}.ts`, `src/lib/keywords.ts`, `src/app/api/whatsapp/webhook/route.ts`, `src/app/api/flows/[id]/route.ts`, `src/app/api/automations/events/route.ts`, `src/app/api/automations/cron/route.ts`.
 - **Como foi testado:** vitest 927/927 (TZ=UTC), pgTAP 51 asserts (7 arquivos), tsc e build ok. Ponta a ponta com webhook assinado, proxy local imitando a Meta (nada saiu da máquina; só 2 consultas do Next ao npm, bloqueadas), crons via curl e dev em TZ=UTC; resultado por item no relatório da tarefa. Limpeza conferida: base 4 contatos / 4 conversas / 7 mensagens.
 - **Pendências / riscos:**
-  - Convivência Reativação × fluxo (C1): resposta a um toque de quem está no meio de um fluxo cai no fluxo, que reenvia o menu; não corrigido (só relatado).
+  - Convivência Reativação × fluxo (C1): resposta a um toque de quem está no meio de um fluxo caía no fluxo, que reenviava o menu → evitado pelo D11 (o toque não sai enquanto há fluxo ativo).
   - Não há tela para mudar o fuso da conta (`accounts.timezone` só no banco/API).
-  - Importação de contatos com etiqueta dispara `tag_added` para cada contato (pelo cron); avaliar antes de usar automação de envio em `tag_added`.
+  - ~~Importação de contatos com etiqueta dispara `tag_added`~~ → resolvido pelo D10 (entrada acima).
   - As mensagens de erro da validação de automações (`validate.ts`, `references.ts`) seguem em inglês, como já eram.
-  - Sem `supabase db reset` completo nesta rodada (as migrations 048–055 foram aplicadas em sequência sobre o banco local).
+  - ~~Sem `supabase db reset` completo~~ → replay feito (entrada acima).
 
 ## 2026-11-17: Reativação: SAIR sem resposta dupla, trava da inscrição e .env do Mac
 - **Origem:** relatório de verificação (SAIR recebia confirmação + resposta da automação/I.A; trava da inscrição contava do início da rodada) e pedido do Samuel de separar as chaves de produção do Mac.
