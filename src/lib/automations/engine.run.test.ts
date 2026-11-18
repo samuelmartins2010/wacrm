@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { memDb, type MemDb } from "./test-db";
 
 const h = vi.hoisted(() => ({ db: null as unknown, sent: [] as string[] }));
@@ -128,5 +128,42 @@ describe("A2: a deactivated or deleted automation does not resume", () => {
     await resumeDue();
     expect(h.sent).toEqual(["um"]);
     expect(pendings()[0].status).toBe("cancelled");
+  });
+});
+
+describe("A3: time_of_day uses the account time zone, never the server's", () => {
+  const branchy = [
+    step("c", 0, "condition", { subject: "time_of_day", operand: "08:00-10:00" }),
+    step("y", 0, "send_message", { text: "dentro" }, { parent_step_id: "c", branch: "yes" }),
+    step("n", 0, "send_message", { text: "fora" }, { parent_step_id: "c", branch: "no" }),
+  ];
+  afterEach(() => vi.useRealTimers());
+
+  it("12:00 UTC is 09:00 in São Paulo (default) → inside 08:00-10:00", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-18T12:00:00Z"));
+    seed([automation()], branchy);
+    db.tables.accounts = [{ id: ACC, timezone: null }];
+    await fire();
+    expect(h.sent).toEqual(["dentro"]);
+  });
+
+  it("an account in Lisbon (12:00) is outside", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-18T12:00:00Z"));
+    seed([automation()], branchy);
+    db.tables.accounts = [{ id: ACC, timezone: "Europe/Lisbon" }];
+    await fire();
+    expect(h.sent).toEqual(["fora"]);
+  });
+});
+
+describe("minutesOfDayIn", () => {
+  it("converts and falls back to São Paulo on an invalid zone", async () => {
+    const { minutesOfDayIn } = await import("./engine");
+    const at = new Date("2026-11-18T12:30:00Z");
+    expect(minutesOfDayIn(at, "America/Sao_Paulo")).toBe(9 * 60 + 30);
+    expect(minutesOfDayIn(at, "Asia/Tokyo")).toBe(21 * 60 + 30);
+    expect(minutesOfDayIn(at, "Not/AZone")).toBe(9 * 60 + 30);
   });
 });

@@ -776,8 +776,8 @@ async function evaluateCondition(cfg: ConditionStepConfig, args: ExecuteArgs): P
       // (supports over-midnight ranges like "18:00-09:00").
       const [from, to] = (cfg.operand ?? '').split('-')
       if (!from || !to) return false
-      const now = new Date()
-      const mins = now.getHours() * 60 + now.getMinutes()
+      // A3: the window is in the account's time zone, never the server's.
+      const mins = minutesOfDayIn(new Date(), await accountTimeZone(args.automation.account_id))
       const parse = (s: string) => {
         const [h, m] = s.split(':').map(Number)
         return (h || 0) * 60 + (m || 0)
@@ -789,6 +789,37 @@ async function evaluateCondition(cfg: ConditionStepConfig, args: ExecuteArgs): P
     default:
       return false
   }
+}
+
+export const DEFAULT_ACCOUNT_TIME_ZONE = 'America/Sao_Paulo'
+
+async function accountTimeZone(accountId: string): Promise<string> {
+  const { data } = await supabaseAdmin()
+    .from('accounts')
+    .select('timezone')
+    .eq('id', accountId)
+    .maybeSingle()
+  const tz = (data as { timezone?: string | null } | null)?.timezone
+  return tz || DEFAULT_ACCOUNT_TIME_ZONE
+}
+
+/** Minutes since midnight of `at` in `timeZone` (invalid zone → default). */
+export function minutesOfDayIn(at: Date, timeZone: string): number {
+  let fmt: Intl.DateTimeFormat
+  try {
+    fmt = new Intl.DateTimeFormat('en-US', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+  } catch {
+    fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: DEFAULT_ACCOUNT_TIME_ZONE,
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+  }
+  const parts = fmt.formatToParts(at)
+  const h = Number(parts.find((p) => p.type === 'hour')?.value ?? 0)
+  const m = Number(parts.find((p) => p.type === 'minute')?.value ?? 0)
+  return h * 60 + m
 }
 
 function waitMs(cfg: WaitStepConfig): number {

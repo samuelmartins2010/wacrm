@@ -57,6 +57,8 @@ export interface Account {
   name: string;
   /** auth.users.id of the immutable owner. */
   owner_user_id: string;
+  /** IANA zone for automation time conditions (migration 053); default America/Sao_Paulo. */
+  timezone?: string;
   created_at: string;
   updated_at: string;
 }
