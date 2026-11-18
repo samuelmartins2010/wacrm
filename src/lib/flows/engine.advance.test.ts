@@ -183,3 +183,23 @@ describe("handoff silences bots on the conversation (D7)", () => {
     expect(writes.conversationUpdates.some(silencedUpdate)).toBe(true);
   });
 });
+
+describe("stale active run found by a new inbound (F8)", () => {
+  const { expireIfStale } = __flowEngineTest;
+  const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
+  const policy = { flows: { fallback_policy: { on_unknown_reply: "reprompt", max_reprompts: 2, on_timeout_hours: 24, on_exhaust: "handoff" } } };
+
+  it("marks a run past on_timeout_hours as timed_out right away, with a timeout event", async () => {
+    const { db, writes } = fakeFlowDb(policy);
+    const expired = await expireIfStale(db as never, run({ last_advanced_at: hoursAgo(30) }));
+    expect(expired).toBe(true);
+    expect(writes.runUpdates.at(-1)).toMatchObject({ status: "timed_out", end_reason: "stale_on_inbound" });
+    expect(writes.events.find((e) => e.event_type === "timeout")?.payload).toMatchObject({ reason: "stale_on_inbound", policy_hours: 24 });
+  });
+
+  it("leaves a run inside the window alone", async () => {
+    const { db, writes } = fakeFlowDb(policy);
+    expect(await expireIfStale(db as never, run({ last_advanced_at: hoursAgo(2) }))).toBe(false);
+    expect(writes.runUpdates).toHaveLength(0);
+  });
+});

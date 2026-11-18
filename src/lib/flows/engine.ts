@@ -542,6 +542,40 @@ async function endRun(
     .eq("id", runId);
 }
 
+/**
+ * F8: an active run past its flow's on_timeout_hours would have been
+ * swept by the cron. If the cron did not run, the contact must not stay
+ * stuck: expire it now (same result as the sweep) so the inbound can
+ * start a new flow or reach automations/AI. Returns whether it expired.
+ */
+async function expireIfStale(db: AdminClient, run: FlowRunRow): Promise<boolean> {
+  const { data: flow } = await db
+    .from("flows")
+    .select("fallback_policy")
+    .eq("id", run.flow_id)
+    .maybeSingle();
+  const policy = resolveFallbackPolicy(
+    (flow as { fallback_policy?: unknown } | null)?.fallback_policy,
+  );
+  const ageHours = (Date.now() - new Date(run.last_advanced_at).getTime()) / 3_600_000;
+  if (!(ageHours >= policy.on_timeout_hours)) return false;
+  await db
+    .from("flow_runs")
+    .update({
+      status: "timed_out",
+      ended_at: new Date().toISOString(),
+      end_reason: "stale_on_inbound",
+    })
+    .eq("id", run.id)
+    .eq("status", "active");
+  await logEvent(db, run.id, "timeout", run.current_node_key, {
+    reason: "stale_on_inbound",
+    policy_hours: policy.on_timeout_hours,
+    age_hours: Math.round(ageHours * 10) / 10,
+  });
+  return true;
+}
+
 // ============================================================
 // The synchronous advance loop. Walks through auto-advance nodes
 // until it hits one that suspends (send_buttons/send_list) or
@@ -856,7 +890,7 @@ export async function dispatchInboundToFlows(
 ): Promise<DispatchInboundResult> {
   const db = supabaseAdmin();
   try {
-    const activeRun = await loadActiveRunForContact(
+    let activeRun = await loadActiveRunForContact(
       db,
       input.accountId,
       input.contactId,
@@ -865,6 +899,12 @@ export async function dispatchInboundToFlows(
     // Idempotency — only matters if there's already a run for this
     // contact. For new runs, the partial unique index catches duplicate
     // starts at INSERT time.
+    // F8: a run the cron should already have timed out does not hold
+    // the contact — expire it here and treat the message as fresh.
+    if (activeRun && (await expireIfStale(db, activeRun))) {
+      activeRun = null;
+    }
+
     if (activeRun) {
       const dupe = await isDuplicateInbound(
         db,
@@ -1144,4 +1184,4 @@ async function startNewRun(
 }
 
 /** Internals exposed for unit tests only. */
-export const __flowEngineTest = { advanceFromNodeKey, handleReplyForActiveRun };
+export const __flowEngineTest = { advanceFromNodeKey, handleReplyForActiveRun, expireIfStale };
