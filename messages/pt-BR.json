@@ -74,7 +74,8 @@
     "menuProfile": "Perfil",
     "menuSettings": "Configurações",
     "menuSignOut": "Sair",
-    "reactivation": "Reativação"
+    "reactivation": "Reativação",
+    "flows": "Fluxos"
   },
   "ModeToggle": {
     "switchMode": "Mudar para o modo {mode}"
@@ -1382,7 +1383,8 @@
       }
     },
     "api": {
-      "saveBlocked": "Não é possível salvar o fluxo ativo — corrija os problemas abaixo antes."
+      "saveBlocked": "Não é possível salvar o fluxo ativo — corrija os problemas abaixo antes.",
+      "activateBlocked": "Não é possível ativar o fluxo — corrija os problemas abaixo antes."
     }
   },
   "Settings": {

@@ -101,7 +101,7 @@ export async function POST(
     if (blockers.length > 0) {
       return NextResponse.json(
         {
-          error: 'Cannot activate flow — fix the issues below first.',
+          error: (await getTranslations('Flows.api'))('activateBlocked'),
           issues,
         },
         { status: 422 },

@@ -18,26 +18,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ModeToggle } from "@/components/layout/mode-toggle";
 
-const pageTitles: Record<string, string> = {
-  "/dashboard": "dashboard",
-  "/inbox": "inbox",
-  "/notifications": "notifications",
-  "/contacts": "contacts",
-  "/pipelines": "pipelines",
-  "/broadcasts": "broadcasts",
-  "/reactivation": "reactivation",
-  "/automations": "automations",
-  "/settings": "settings",
-};
-
-function getPageTitleKey(pathname: string): string {
-  if (pageTitles[pathname]) return pageTitles[pathname];
-  const match = Object.entries(pageTitles).find(([path]) =>
-    pathname.startsWith(path),
-  );
-  return match ? match[1] : "dashboard";
-}
-
 interface HeaderProps {
   /** Wired to the shell's drawer state. Used only on mobile — the
    *  hamburger button is hidden on lg+. */
@@ -45,6 +25,7 @@ interface HeaderProps {
 }
 
 import { useTranslations } from "next-intl";
+import { getPageTitleKey } from "./header-title";
 
 export function Header({ onOpenSidebar }: HeaderProps) {
   const t = useTranslations("Header");

@@ -15,9 +15,9 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
-import { format, formatDistanceToNow } from "date-fns";
+import { formatDuration, formatEventTime, formatRunStarted } from "@/lib/flows/run-dates";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -226,14 +226,13 @@ function RunCard({
   onToggle: () => void;
   t: ReturnType<typeof useTranslations>;
 }) {
+  const locale = useLocale();
   const meta = getStatusMeta(t, run.status);
   const StatusIcon = meta.icon;
   const contactLabel =
     run.contact?.name?.trim() || run.contact?.phone || t("unknownContact");
   const duration = run.ended_at
-    ? formatDistanceToNow(new Date(run.ended_at), {
-        addSuffix: false,
-      })
+    ? formatDuration(locale, run.started_at, run.ended_at)
     : null;
   return (
     <div className="rounded-lg border border-border bg-card">
@@ -275,7 +274,7 @@ function RunCard({
             )}
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-            <span>{t("started", { time: format(new Date(run.started_at), "PP p") })}</span>
+            <span>{t("started", { time: formatRunStarted(locale, run.started_at) })}</span>
             {run.reprompt_count > 0 && (
               <span>· {t("reprompts", { count: run.reprompt_count })}</span>
             )}
@@ -324,11 +323,12 @@ const EVENT_COLOR: Record<string, string> = {
 };
 
 function EventLine({ ev }: { ev: EventRow }) {
+  const locale = useLocale();
   const cls = EVENT_COLOR[ev.event_type] ?? "text-muted-foreground";
   return (
     <div className="flex items-start gap-2 rounded-md px-2 py-1 text-xs">
       <span className="w-32 shrink-0 text-[10px] text-muted-foreground">
-        {format(new Date(ev.created_at), "HH:mm:ss")}
+        {formatEventTime(locale, ev.created_at)}
       </span>
       <span className={cn("w-32 shrink-0 font-mono text-[10px]", cls)}>
         {ev.event_type}

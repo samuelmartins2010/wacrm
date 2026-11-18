@@ -74,7 +74,8 @@
     "menuProfile": "Profile",
     "menuSettings": "Settings",
     "menuSignOut": "Sign out",
-    "reactivation": "Reactivation"
+    "reactivation": "Reactivation",
+    "flows": "Flows"
   },
   "ModeToggle": {
     "switchMode": "Switch to {mode} mode"
@@ -1382,7 +1383,8 @@
       }
     },
     "api": {
-      "saveBlocked": "Cannot save the active flow — fix the issues below first."
+      "saveBlocked": "Cannot save the active flow — fix the issues below first.",
+      "activateBlocked": "Cannot activate flow — fix the issues below first."
     }
   },
   "Settings": {
