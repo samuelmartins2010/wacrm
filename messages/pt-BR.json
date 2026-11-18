@@ -1292,7 +1292,8 @@
         "setTagNeedsTag": "Marcar contato precisa de uma tag para aplicar.",
         "setTagNeedsNext": "Marcar contato deve apontar para um próximo nó.",
         "setTagPointsToMissing": "Marcar contato aponta para um nó inexistente \"{key}\".",
-        "unknownNodeType": "Tipo de nó desconhecido \"{type}\"."
+        "unknownNodeType": "Tipo de nó desconhecido \"{type}\".",
+        "cycleWithoutWait": "Loop que nunca espera o cliente: {path}. Inclua um nó que aguarde resposta (botões, lista ou coletar resposta)."
       }
     },
     "editorState": {

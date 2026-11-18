@@ -1292,7 +1292,8 @@
         "setTagNeedsTag": "Set-tag needs a tag to apply.",
         "setTagNeedsNext": "Set-tag must point to a next node.",
         "setTagPointsToMissing": "Set-tag points to non-existent node \"{key}\".",
-        "unknownNodeType": "Unknown node type \"{type}\"."
+        "unknownNodeType": "Unknown node type \"{type}\".",
+        "cycleWithoutWait": "Loop that never waits for the customer: {path}. Add a node that waits for a reply (buttons, list or collect input)."
       }
     },
     "editorState": {

@@ -547,3 +547,54 @@ describe("reachableFromEntry", () => {
     expect(set).toEqual(new Set(["a", "b"]));
   });
 });
+
+describe("cycles that never wait for the customer (F1)", () => {
+  const flow = { name: "f", trigger_type: "keyword" as const, trigger_config: { keywords: ["x"] }, entry_node_id: "start" };
+  const cycleIssues = (nodes: { node_key: string; node_type: string; config: Record<string, unknown> }[]) =>
+    validateFlowForActivation(flow, nodes).filter((i) => i.severity === "error" && /loop/i.test(i.message));
+
+  it("blocks A → B → A between send_message nodes", () => {
+    const issues = cycleIssues([
+      { node_key: "start", node_type: "start", config: { next_node_key: "a" } },
+      { node_key: "a", node_type: "send_message", config: { text: "a", next_node_key: "b" } },
+      { node_key: "b", node_type: "send_message", config: { text: "b", next_node_key: "a" } },
+    ]);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].message).toMatch(/a → b → a|b → a → b/);
+  });
+
+  it("blocks a set_tag that points to itself", () => {
+    expect(
+      cycleIssues([
+        { node_key: "start", node_type: "start", config: { next_node_key: "t" } },
+        { node_key: "t", node_type: "set_tag", config: { mode: "add", tag_id: "x", next_node_key: "t" } },
+      ]),
+    ).toHaveLength(1);
+  });
+
+  it("allows a loop that goes through a node that waits for the customer", () => {
+    expect(
+      cycleIssues([
+        { node_key: "start", node_type: "start", config: { next_node_key: "menu" } },
+        {
+          node_key: "menu",
+          node_type: "send_buttons",
+          config: { text: "?", buttons: [{ reply_id: "again", title: "De novo", next_node_key: "info" }, { reply_id: "end", title: "Sair", next_node_key: "fim" }] },
+        },
+        { node_key: "info", node_type: "send_message", config: { text: "info", next_node_key: "menu" } },
+        { node_key: "fim", node_type: "end", config: {} },
+      ]),
+    ).toHaveLength(0);
+  });
+
+  it("allows a loop through collect_input", () => {
+    expect(
+      cycleIssues([
+        { node_key: "start", node_type: "start", config: { next_node_key: "ask" } },
+        { node_key: "ask", node_type: "collect_input", config: { prompt_text: "?", var_key: "x", next_node_key: "c" } },
+        { node_key: "c", node_type: "condition", config: { subject: "var", subject_key: "x", operator: "present", true_next: "fim", false_next: "ask" } },
+        { node_key: "fim", node_type: "end", config: {} },
+      ]),
+    ).toHaveLength(0);
+  });
+});

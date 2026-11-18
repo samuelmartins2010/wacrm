@@ -544,6 +544,9 @@ async function endRun(
 // new current_node_key before returning.
 // ============================================================
 
+/** F1: most messages one advance may send before it is stopped. */
+export const MAX_MESSAGES_PER_ADVANCE = 10;
+
 async function advanceFromNodeKey(
   db: AdminClient,
   run: FlowRunRow,
@@ -551,8 +554,21 @@ async function advanceFromNodeKey(
   nodes: Map<string, FlowNodeRow>,
 ): Promise<{ outcome: "advanced" | "completed" | "handed_off" }> {
   let currentKey: string | null = startNodeKey;
-  // Defensive cap — if a flow has a cycle (which the validator
-  // SHOULD catch but doesn't yet in v1), we bail rather than loop.
+  // Messages sent by this single advance (F1). The validator blocks
+  // loops that never wait for the customer; this is the runtime guard
+  // for flows saved before that rule, so a bad graph can't flood the
+  // customer.
+  let messagesSent = 0;
+  const overBudget = async (nodeKey: string): Promise<boolean> => {
+    if (messagesSent < MAX_MESSAGES_PER_ADVANCE) return false;
+    await logEvent(db, run.id, "error", nodeKey, {
+      reason: "too_many_messages_per_advance",
+      limit: MAX_MESSAGES_PER_ADVANCE,
+    });
+    await endRun(db, run.id, "failed", "too_many_messages_per_advance");
+    return true;
+  };
+  // Defensive cap on iterations (non-sending nodes can loop too).
   for (let safety = 0; safety < 64; safety += 1) {
     if (!currentKey) {
       await logEvent(db, run.id, "error", null, {
@@ -579,6 +595,7 @@ async function advanceFromNodeKey(
     }
     if (node.node_type === "send_message") {
       const cfg = node.config as unknown as SendMessageNodeConfig;
+      if (await overBudget(node.node_key)) return { outcome: "completed" };
       try {
         const { whatsapp_message_id } = await engineSendText({
           accountId: run.account_id,
@@ -591,6 +608,7 @@ async function advanceFromNodeKey(
           node_type: "send_message",
           whatsapp_message_id,
         });
+        messagesSent += 1;
       } catch (err) {
         await logEvent(db, run.id, "error", node.node_key, {
           reason: "send_text_failed",
@@ -604,6 +622,7 @@ async function advanceFromNodeKey(
     }
     if (node.node_type === "send_media") {
       const cfg = node.config as unknown as SendMediaNodeConfig;
+      if (await overBudget(node.node_key)) return { outcome: "completed" };
       try {
         const { whatsapp_message_id } = await engineSendMedia({
           accountId: run.account_id,
@@ -622,6 +641,7 @@ async function advanceFromNodeKey(
           media_type: cfg.media_type,
           whatsapp_message_id,
         });
+        messagesSent += 1;
       } catch (err) {
         await logEvent(db, run.id, "error", node.node_key, {
           reason: "send_media_failed",
@@ -1115,3 +1135,6 @@ async function startNewRun(
     outcome: outcome.outcome === "advanced" ? "started" : outcome.outcome,
   };
 }
+
+/** Internals exposed for unit tests only. */
+export const __flowEngineTest = { advanceFromNodeKey, handleReplyForActiveRun };

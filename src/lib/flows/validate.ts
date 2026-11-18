@@ -153,7 +153,61 @@ export function validateFlowForActivation(
     }
   }
 
+  // Loops that never stop to wait for the customer would make the
+  // engine send message after message in one go (F1). Every cycle must
+  // pass through a node that suspends the run.
+  const loop = findCycleWithoutWaiting(nodes);
+  if (loop) {
+    const path = loop.join(" → ");
+    issues.push({
+      severity: "error",
+      scope: "node",
+      node_key: loop[0],
+      message: t
+        ? t("cycleWithoutWait", { path })
+        : `Loop that never waits for the customer: ${path}. Add a node that waits for a reply (buttons, list or collect input).`,
+    });
+  }
+
   return issues;
+}
+
+/** Nodes that suspend the run until the customer replies. */
+const WAITING_NODE_TYPES = new Set(["send_buttons", "send_list", "collect_input"]);
+
+/**
+ * A cycle made only of non-waiting nodes, as a closed path
+ * (["a", "b", "a"]), or null. Edges into waiting nodes are dropped, so
+ * any cycle that passes through one is allowed.
+ */
+export function findCycleWithoutWaiting(nodes: NodeInput[]): string[] | null {
+  const byKey = new Map<string, NodeInput>();
+  for (const n of nodes) if (!WAITING_NODE_TYPES.has(n.node_type)) byKey.set(n.node_key, n);
+  const state = new Map<string, "visiting" | "done">();
+  const stack: string[] = [];
+  const visit = (key: string): string[] | null => {
+    state.set(key, "visiting");
+    stack.push(key);
+    for (const next of outgoingEdges(byKey.get(key)!)) {
+      if (!byKey.has(next)) continue;
+      const st = state.get(next);
+      if (st === "visiting") return [...stack.slice(stack.indexOf(next)), next];
+      if (!st) {
+        const found = visit(next);
+        if (found) return found;
+      }
+    }
+    stack.pop();
+    state.set(key, "done");
+    return null;
+  };
+  for (const key of byKey.keys()) {
+    if (!state.has(key)) {
+      const found = visit(key);
+      if (found) return found;
+    }
+  }
+  return null;
 }
 
 // ============================================================
