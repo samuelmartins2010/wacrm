@@ -166,12 +166,82 @@ export async function resumePendingExecution(pending: {
   }
 }
 
+/**
+ * D4 / A1: the contact sent something while one or more automations were
+ * parked at a wait for them. Cancel those waits — except automations that
+ * opted into "continue even if the contact replies" — and record it on
+ * each run's log. Called by the webhook for every inbound from the contact,
+ * before this message's own triggers run. Must never throw.
+ */
+export async function cancelWaitsOnContactReply(accountId: string, contactId: string): Promise<number> {
+  try {
+    const db = supabaseAdmin()
+    const { data: open } = await db
+      .from('automation_pending_executions')
+      .select('id, automation_id, log_id')
+      .eq('account_id', accountId)
+      .eq('contact_id', contactId)
+      .eq('status', 'pending')
+    const rows = (open ?? []) as { id: string; automation_id: string; log_id: string | null }[]
+    if (rows.length === 0) return 0
+
+    const { data: keep } = await db
+      .from('automations')
+      .select('id')
+      .eq('account_id', accountId)
+      .eq('continue_on_reply', true)
+    const keepIds = new Set(((keep ?? []) as { id: string }[]).map((a) => a.id))
+
+    let cancelled = 0
+    for (const row of rows) {
+      if (keepIds.has(row.automation_id)) continue
+      const { data: hit } = await db
+        .from('automation_pending_executions')
+        .update({ status: 'cancelled' })
+        .eq('id', row.id)
+        .eq('status', 'pending') // the cron may have claimed it meanwhile
+        .select('id')
+      if (!hit || (hit as unknown[]).length === 0) continue
+      cancelled++
+      await appendResults(
+        row.log_id,
+        [{ step_id: row.id, step_type: 'wait', status: 'skipped', detail: 'cancelled: contact replied during the wait' }],
+        'cancelled',
+        null,
+      )
+    }
+    return cancelled
+  } catch (err) {
+    console.error('[automations] cancelWaitsOnContactReply failed:', err)
+    return 0
+  }
+}
+
+/** A1: does this automation already have an open (waiting) run for the contact? */
+async function hasOpenRun(automationId: string, contactId: string): Promise<boolean> {
+  const { data } = await supabaseAdmin()
+    .from('automation_pending_executions')
+    .select('id')
+    .eq('automation_id', automationId)
+    .eq('contact_id', contactId)
+    .in('status', ['pending', 'running'])
+    .limit(1)
+  return ((data ?? []) as unknown[]).length > 0
+}
+
 // ------------------------------------------------------------
 // Internal execution
 // ------------------------------------------------------------
 
 async function executeAutomation(automation: Automation, input: DispatchInput) {
   const db = supabaseAdmin()
+
+  // A1: one execution per automation and contact. While a run is parked
+  // at a wait for this contact (it survived the reply because of
+  // continue_on_reply), the trigger firing again does not start another.
+  if (input.contactId && (await hasOpenRun(automation.id, input.contactId))) {
+    return
+  }
 
   const { data: log, error: logErr } = await db
     .from('automation_logs')
@@ -268,7 +338,7 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
     if (step.step_type === 'wait') {
       const cfg = step.step_config as WaitStepConfig
       const ms = waitMs(cfg)
-      await db.from('automation_pending_executions').insert({
+      const { error: waitErr } = await db.from('automation_pending_executions').insert({
         automation_id: args.automation.id,
         // Tenancy: account_id required NOT NULL post-017.
         account_id: args.automation.account_id,
@@ -282,6 +352,17 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
         run_at: new Date(Date.now() + ms).toISOString(),
         status: 'pending',
       })
+      if (waitErr) {
+        // 23505: another run of this automation is already waiting for
+        // this contact (A1) — this one stops instead of running in parallel.
+        const msg =
+          (waitErr as { code?: string }).code === '23505'
+            ? 'another run of this automation is already waiting for this contact'
+            : `could not schedule the wait: ${waitErr.message}`
+        results.push({ step_id: step.id, step_type: step.step_type, status: 'failed', detail: msg })
+        await appendResults(args.logId, results, 'failed', msg)
+        return
+      }
       results.push({
         step_id: step.id,
         step_type: step.step_type,
@@ -714,7 +795,7 @@ function interpolate(s: string, args: ExecuteArgs): string {
 async function appendResults(
   logId: string | null,
   newItems: AutomationLogStepResult[],
-  status: 'success' | 'partial' | 'failed' | null,
+  status: 'success' | 'partial' | 'failed' | 'cancelled' | null,
   errorMessage: string | null,
 ) {
   if (!logId) return

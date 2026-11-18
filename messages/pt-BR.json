@@ -841,7 +841,8 @@
       "status": {
         "success": "sucesso",
         "partial": "parcial",
-        "failed": "falhou"
+        "failed": "falhou",
+        "cancelled": "Cancelada"
       },
       "back": "Voltar",
       "backAria": "Voltar"
@@ -999,7 +1000,9 @@
         "matchExact": "Exato",
         "closeConversationHint": "Define o status da conversa como \"fechada\". Nenhuma configuração necessária."
       },
-      "cronPlaceholder": "Expressão cron ou HH:mm"
+      "cronPlaceholder": "Expressão cron ou HH:mm",
+      "continueOnReply": "Continuar mesmo se o contato responder",
+      "continueOnReplyHelp": "Desligado (padrão): se o contato mandar mensagem durante uma espera, o restante desta automação é cancelado."
     },
     "templates": {
       "welcome_message": {

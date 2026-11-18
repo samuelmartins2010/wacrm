@@ -41,6 +41,7 @@ export default function EditAutomationPage({
         trigger_type: body.automation.trigger_type as AutomationTriggerType,
         trigger_config: body.automation.trigger_config ?? {},
         is_active: !!body.automation.is_active,
+        continue_on_reply: !!body.automation.continue_on_reply,
         steps: fromServerSteps((body.steps ?? []) as ServerStepNode[]),
       })
     }

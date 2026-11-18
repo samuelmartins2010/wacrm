@@ -466,7 +466,7 @@ export type AutomationStepType =
   | 'send_webhook'
   | 'close_conversation';
 
-export type AutomationLogStatus = 'success' | 'partial' | 'failed';
+export type AutomationLogStatus = 'success' | 'partial' | 'failed' | 'cancelled';
 
 export interface KeywordMatchTriggerConfig {
   keywords: string[];
@@ -602,6 +602,8 @@ export interface Automation {
   last_executed_at?: string | null;
   created_at: string;
   updated_at: string;
+  /** D4: keep running after a wait even if the contact replies (default false). */
+  continue_on_reply?: boolean;
 }
 
 export interface AutomationStep {

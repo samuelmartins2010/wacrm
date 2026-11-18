@@ -841,7 +841,8 @@
       "status": {
         "success": "success",
         "partial": "partial",
-        "failed": "failed"
+        "failed": "failed",
+        "cancelled": "Cancelled"
       },
       "back": "Back",
       "backAria": "Back"
@@ -999,7 +1000,9 @@
         "matchExact": "Exact",
         "closeConversationHint": "Sets the conversation status to \"closed\". No configuration needed."
       },
-      "cronPlaceholder": "Cron expression or HH:mm"
+      "cronPlaceholder": "Cron expression or HH:mm",
+      "continueOnReply": "Continue even if the contact replies",
+      "continueOnReplyHelp": "Off (default): if the contact sends a message during a wait, the rest of this automation is cancelled."
     },
     "templates": {
       "welcome_message": {

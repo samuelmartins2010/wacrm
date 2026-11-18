@@ -5,7 +5,7 @@ import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
 import { normalizePhone } from '@/lib/whatsapp/phone-utils'
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
-import { runAutomationsForTrigger } from '@/lib/automations/engine'
+import { runAutomationsForTrigger, cancelWaitsOnContactReply } from '@/lib/automations/engine'
 import { engineSendText } from '@/lib/automations/meta-send'
 import {
   handleReactivationInbound,
@@ -857,6 +857,12 @@ async function processMessage(
   // message; nothing fires for an opt-out the Reativação consumed.
   // new_contact_created / first_inbound_message are relationship
   // triggers (see planAutomationTriggers).
+  // D4 / A1: the contact wrote — automations parked at a wait for them
+  // stop here (unless "continue even if the contact replies" is on).
+  // Before this message's own triggers, so a repeated keyword can start
+  // a fresh run instead of colliding with the cancelled one.
+  // Also on an opt-out (SAIR): nothing more should go out after it.
+  await cancelWaitsOnContactReply(accountId, contactRecord.id)
   const automationTriggers = planAutomationTriggers(plan)
   for (const triggerType of automationTriggers) {
     runAutomationsForTrigger({

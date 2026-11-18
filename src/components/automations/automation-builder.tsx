@@ -83,6 +83,8 @@ export interface BuilderInitial {
   trigger_type: AutomationTriggerType
   trigger_config: Record<string, unknown>
   is_active: boolean
+  /** D4: keep running after a wait even if the contact replies. */
+  continue_on_reply?: boolean
   steps: BuilderStep[]
 }
 
@@ -669,6 +671,7 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
         trigger_type: state.trigger_type,
         trigger_config: state.trigger_config,
         is_active: state.is_active,
+        continue_on_reply: !!state.continue_on_reply,
         steps: toApiSteps(state.steps),
       }
 
@@ -769,10 +772,32 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
               deleteStepAt={deleteStepAt}
               moveStepAt={moveStepAt}
             />
+            {hasWaitStep(state.steps) && (
+              <label className="mt-6 flex w-full max-w-md items-start gap-3 rounded-lg border border-border bg-card p-3 text-xs">
+                <Switch
+                  checked={!!state.continue_on_reply}
+                  onCheckedChange={(v) => patchTop("continue_on_reply", !!v)}
+                  aria-label={t("continueOnReply")}
+                />
+                <span>
+                  <span className="block font-medium text-foreground">{t("continueOnReply")}</span>
+                  <span className="text-muted-foreground">{t("continueOnReplyHelp")}</span>
+                </span>
+              </label>
+            )}
           </ResourcesProvider>
         </div>
       </div>
     </div>
+  )
+}
+
+/** Any wait step, at any depth (inside condition branches too)? */
+function hasWaitStep(steps: BuilderStep[]): boolean {
+  return steps.some(
+    (s) =>
+      s.step_type === "wait" ||
+      (!!s.branches && (hasWaitStep(s.branches.yes) || hasWaitStep(s.branches.no))),
   )
 }
 
