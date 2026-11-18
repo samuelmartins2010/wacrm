@@ -51,6 +51,7 @@ import { TemplatePicker } from "./template-picker";
 import { AiThreadBanner } from "./ai-thread-banner";
 import { buildReplyPreview } from "./reply-quote";
 import { toast } from "sonner";
+import { pingAutomationEvents } from "@/lib/automations/ping";
 
 interface ReplyDraft {
   id: string;
@@ -833,6 +834,7 @@ export function MessageThread({
         return;
       }
 
+      if (agentId) pingAutomationEvents(); // D3: conversation_assigned
       onAssignChange(conversation.id, agentId);
     },
     [conversation, onAssignChange],

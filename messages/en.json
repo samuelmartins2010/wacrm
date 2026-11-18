@@ -823,7 +823,8 @@
         "duplicateError": "Failed to duplicate",
         "deleteError": "Failed to delete"
       },
-      "sameTriggerWarning": "Same trigger as: {others}. All of them run, in creation order — this one is #{order} of {total}."
+      "sameTriggerWarning": "Same trigger as: {others}. All of them run, in creation order — this one is #{order} of {total}.",
+      "timeBasedDeprecated": "The \"Time-based\" trigger does not work and can no longer be chosen. This automation never fires — change the trigger or deactivate it."
     },
     "edit": {
       "loading": "Loading...",
@@ -1004,7 +1005,8 @@
       },
       "cronPlaceholder": "Cron expression or HH:mm",
       "continueOnReply": "Continue even if the contact replies",
-      "continueOnReplyHelp": "Off (default): if the contact sends a message during a wait, the rest of this automation is cancelled."
+      "continueOnReplyHelp": "Off (default): if the contact sends a message during a wait, the rest of this automation is cancelled.",
+      "timeBasedDeprecated": "The \"Time-based\" trigger does not work and can no longer be chosen. This automation never fires — change the trigger or deactivate it."
     },
     "templates": {
       "welcome_message": {

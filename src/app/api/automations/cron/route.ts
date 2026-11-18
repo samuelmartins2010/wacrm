@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { verifyCronSecret } from '@/lib/cron-auth'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
-import { resumePendingExecution } from '@/lib/automations/engine'
+import { drainAutomationTriggerEvents, resumePendingExecution } from '@/lib/automations/engine'
 import type { AutomationContext } from '@/lib/automations/engine'
 
 /**
@@ -20,6 +20,9 @@ export async function GET(request: Request) {
   if (denied) return denied
 
   const admin = supabaseAdmin()
+  // D3 safety net: tag_added / conversation_assigned events nobody
+  // drained right away (e.g. a tag added by an import) fire here.
+  let triggerEvents = await drainAutomationTriggerEvents(null)
   const { data: due, error } = await admin
     .from('automation_pending_executions')
     .select('*')
@@ -29,7 +32,7 @@ export async function GET(request: Request) {
     .limit(50)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!due || due.length === 0) return NextResponse.json({ processed: 0 })
+  if (!due || due.length === 0) return NextResponse.json({ processed: 0, trigger_events: triggerEvents })
 
   let processed = 0
   for (const row of due) {
@@ -59,5 +62,7 @@ export async function GET(request: Request) {
     processed++
   }
 
-  return NextResponse.json({ processed })
+  // Steps that ran after a wait may have tagged/assigned.
+  triggerEvents += await drainAutomationTriggerEvents(null)
+  return NextResponse.json({ processed, trigger_events: triggerEvents })
 }

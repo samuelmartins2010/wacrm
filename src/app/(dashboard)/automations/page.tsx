@@ -335,6 +335,11 @@ function AutomationCard({
             <span aria-hidden>·</span>
             <span>{t("lastRun", { time: formatRelative(automation.last_executed_at) })}</span>
           </div>
+          {automation.trigger_type === "time_based" && (
+            <p className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-300">
+              {t("timeBasedDeprecated")}
+            </p>
+          )}
           {duplicate && (
             <p className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-300">
               {t("sameTriggerWarning", {

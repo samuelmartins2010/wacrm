@@ -5,7 +5,7 @@ import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
 import { normalizePhone } from '@/lib/whatsapp/phone-utils'
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
-import { runAutomationsForTrigger, cancelWaitsOnContactReply } from '@/lib/automations/engine'
+import { runAutomationsForTrigger, cancelWaitsOnContactReply, drainAutomationTriggerEvents } from '@/lib/automations/engine'
 import { engineSendText } from '@/lib/automations/meta-send'
 import {
   handleReactivationInbound,
@@ -864,8 +864,9 @@ async function processMessage(
   // Also on an opt-out (SAIR): nothing more should go out after it.
   await cancelWaitsOnContactReply(accountId, contactRecord.id)
   const automationTriggers = planAutomationTriggers(plan)
+  const automationRuns: Promise<void>[] = []
   for (const triggerType of automationTriggers) {
-    runAutomationsForTrigger({
+    automationRuns.push(runAutomationsForTrigger({
       accountId,
       triggerType,
       contactId: contactRecord.id,
@@ -876,7 +877,7 @@ async function processMessage(
         // trigger's exact-id match.
         interactive_reply_id: interactiveReplyId ?? undefined,
       },
-    }).catch((err) => console.error('[automations] dispatch failed:', err))
+    }).catch((err) => console.error('[automations] dispatch failed:', err)))
   }
 
   // AI auto-reply. Runs only for plain-text inbound the deterministic
@@ -892,6 +893,13 @@ async function processMessage(
       configOwnerUserId,
     })
   }
+
+  // D3: tags / assignments made above by flows, automations or the AI
+  // handoff fire tag_added / conversation_assigned now. Waits for this
+  // message's automation runs first (we are inside after(), so awaiting
+  // only keeps the function alive; Meta already got its 200).
+  await Promise.all(automationRuns)
+  await drainAutomationTriggerEvents(accountId)
 
   // message.received webhook (public API). Awaited — not fire-and-forget
   // — because we're inside the route's `after()` block, which only keeps

@@ -35,6 +35,20 @@ function seed(autos: Record<string, unknown>[], steps: Record<string, unknown>[]
       automation_pending_executions: [],
     },
     {
+      rpc: {
+        // migration 055 functions (without the event side effect)
+        automation_add_tag: (a, d) => {
+          const tags = (d.tables.contact_tags ??= []);
+          if (tags.some((t) => t.contact_id === a.p_contact_id && t.tag_id === a.p_tag_id)) return false;
+          tags.push({ contact_id: a.p_contact_id, tag_id: a.p_tag_id });
+          return true;
+        },
+        automation_assign_conversation: (a, d) => {
+          const rows = (d.tables.conversations ?? []).filter((c) => c.account_id === a.p_account_id && c.contact_id === a.p_contact_id);
+          rows.forEach((c) => (c.assigned_agent_id = a.p_agent_id));
+          return rows.length;
+        },
+      },
       unique: {
         automation_pending_executions: [
           { cols: ["automation_id", "contact_id"], where: (r) => r.status === "pending" || r.status === "running" },

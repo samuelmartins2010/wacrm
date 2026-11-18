@@ -40,6 +40,13 @@ export interface AutomationContext {
   agent_id?: string
   /** Button / list-row id the customer tapped, for interactive_reply. */
   interactive_reply_id?: string
+  /**
+   * A7: how many automation hops led to this run. 0 = caused by the
+   * customer, a screen, the API or a flow; 1 = caused by another
+   * automation's step. Steps of a run write with depth + 1, and events
+   * deeper than MAX_TRIGGER_DEPTH do not fire (loop protection).
+   */
+  automation_depth?: number
 }
 
 export interface DispatchInput {
@@ -246,6 +253,65 @@ async function hasOpenRun(automationId: string, contactId: string): Promise<bool
     .in('status', ['pending', 'running'])
     .limit(1)
   return ((data ?? []) as unknown[]).length > 0
+}
+
+/** A7: events deeper than this are recorded but do not fire. */
+export const MAX_TRIGGER_DEPTH = 1
+
+interface TriggerEventRow {
+  id: string
+  account_id: string
+  trigger_type: 'tag_added' | 'conversation_assigned'
+  contact_id: string | null
+  context: AutomationContext | null
+  depth: number
+}
+
+/**
+ * D3: run the automations for tag_added / conversation_assigned events
+ * recorded by the database (migration 055), whatever wrote the change:
+ * a screen, the public API, a flow or an automation step. Called right
+ * after server-side writes (webhook, API, the inbox's ping) and by the
+ * automations cron as a safety net. Loops through rounds so a chain
+ * (tag → automation → tag) is processed now, bounded by the depth cap.
+ * Never throws.
+ */
+export async function drainAutomationTriggerEvents(accountId: string | null, limit = 50): Promise<number> {
+  let fired = 0
+  try {
+    const db = supabaseAdmin()
+    for (let round = 0; round < 10; round++) {
+      const { data, error } = await db.rpc('claim_automation_trigger_events', {
+        p_account_id: accountId,
+        p_limit: limit,
+      })
+      if (error) {
+        console.error('[automations] claim trigger events failed:', error)
+        return fired
+      }
+      const events = (data ?? []) as TriggerEventRow[]
+      if (events.length === 0) return fired
+      for (const ev of events) {
+        const skip = ev.depth > MAX_TRIGGER_DEPTH
+        if (!skip) {
+          await runAutomationsForTrigger({
+            accountId: ev.account_id,
+            triggerType: ev.trigger_type,
+            contactId: ev.contact_id,
+            context: { ...(ev.context ?? {}), automation_depth: ev.depth },
+          })
+          fired++
+        }
+        await db
+          .from('automation_trigger_events')
+          .update({ status: skip ? 'skipped' : 'done', processed_at: new Date().toISOString() })
+          .eq('id', ev.id)
+      }
+    }
+  } catch (err) {
+    console.error('[automations] drainAutomationTriggerEvents failed:', err)
+  }
+  return fired
 }
 
 // ------------------------------------------------------------
@@ -563,14 +629,14 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       if (!args.contactId || !cfg.tag_id) throw new Error('add_tag needs contact + tag_id')
       // A6: the tag must exist in this account.
       await requireRow('tags', { id: cfg.tag_id, account_id: args.automation.account_id }, 'add_tag: tag not found in this account')
-      const { error: tagErr } = await db
-        .from('contact_tags')
-        .upsert(
-          { contact_id: args.contactId, tag_id: cfg.tag_id },
-          { onConflict: 'contact_id,tag_id', ignoreDuplicates: true },
-        )
+      // Through the RPC so the tag_added event carries this run's depth (A7).
+      const { data: inserted, error: tagErr } = await db.rpc('automation_add_tag', {
+        p_contact_id: args.contactId,
+        p_tag_id: cfg.tag_id,
+        p_depth: (args.context.automation_depth ?? 0) + 1,
+      })
       if (tagErr) throw new Error(`add_tag failed: ${tagErr.message}`)
-      return `tag ${cfg.tag_id} added`
+      return inserted === false ? `tag ${cfg.tag_id} already present` : `tag ${cfg.tag_id} added`
     }
 
     case 'remove_tag': {
@@ -609,14 +675,15 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         { user_id: agentId, account_id: args.automation.account_id },
         'assign_conversation: agent is not a member of this account',
       )
-      const { data: assigned, error: assignErr } = await db
-        .from('conversations')
-        .update({ assigned_agent_id: agentId })
-        .eq('account_id', args.automation.account_id)
-        .eq('contact_id', args.contactId)
-        .select('id')
+      // Through the RPC so the conversation_assigned event carries depth (A7).
+      const { data: assigned, error: assignErr } = await db.rpc('automation_assign_conversation', {
+        p_account_id: args.automation.account_id,
+        p_contact_id: args.contactId,
+        p_agent_id: agentId,
+        p_depth: (args.context.automation_depth ?? 0) + 1,
+      })
       if (assignErr) throw new Error(`assign_conversation failed: ${assignErr.message}`)
-      if (!assigned || (assigned as unknown[]).length === 0) {
+      if (!assigned) {
         throw new Error('assign_conversation: no conversation for this contact')
       }
       return `assigned to ${agentId}`
@@ -801,6 +868,17 @@ export function triggerMatches(automation: Automation, ctx: AutomationContext | 
     if (!cfg?.keywords || cfg.keywords.length === 0) return false
     // D5: shared rule with flows (src/lib/keywords.ts).
     return keywordMatches((ctx?.message_text ?? '').toString(), cfg.keywords, cfg.match_type)
+  }
+
+  // D3: tag_added fires for the configured tag only.
+  if (automation.trigger_type === 'tag_added') {
+    const tagId = (automation.trigger_config as { tag_id?: string } | null)?.tag_id
+    return !tagId || ctx?.tag_id === tagId
+  }
+  // conversation_assigned: optionally only for one agent.
+  if (automation.trigger_type === 'conversation_assigned') {
+    const agentId = (automation.trigger_config as { agent_id?: string } | null)?.agent_id
+    return !agentId || ctx?.agent_id === agentId
   }
 
   // Match on the tapped button / list-row id (exact). Lets multi-step

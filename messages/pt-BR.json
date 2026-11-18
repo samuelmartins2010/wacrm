@@ -823,7 +823,8 @@
         "duplicateError": "Falha ao duplicar",
         "deleteError": "Falha ao excluir"
       },
-      "sameTriggerWarning": "Mesmo gatilho que: {others}. Todas rodam, na ordem de criação — esta é a {order}ª de {total}."
+      "sameTriggerWarning": "Mesmo gatilho que: {others}. Todas rodam, na ordem de criação — esta é a {order}ª de {total}.",
+      "timeBasedDeprecated": "O gatilho \"Baseado em horário\" não está funcionando e não pode mais ser escolhido. Esta automação nunca dispara — troque o gatilho ou desative-a."
     },
     "edit": {
       "loading": "Carregando...",
@@ -1004,7 +1005,8 @@
       },
       "cronPlaceholder": "Expressão cron ou HH:mm",
       "continueOnReply": "Continuar mesmo se o contato responder",
-      "continueOnReplyHelp": "Desligado (padrão): se o contato mandar mensagem durante uma espera, o restante desta automação é cancelado."
+      "continueOnReplyHelp": "Desligado (padrão): se o contato mandar mensagem durante uma espera, o restante desta automação é cancelado.",
+      "timeBasedDeprecated": "O gatilho \"Baseado em horário\" não está funcionando e não pode mais ser escolhido. Esta automação nunca dispara — troque o gatilho ou desative-a."
     },
     "templates": {
       "welcome_message": {

@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { DoNotContactToggle } from '@/components/reactivation/do-not-contact-toggle';
+import { pingAutomationEvents } from '@/lib/automations/ping';
 
 interface ContactDetailViewProps {
   open: boolean;
@@ -246,6 +247,7 @@ export function ContactDetailView({
         .from('contact_tags')
         .insert({ contact_id: contactId, tag_id: tagId });
       if (!error) {
+        pingAutomationEvents(); // D3: tag_added automations
         setContactTagIds((prev) => [...prev, tagId]);
         onUpdated();
       }

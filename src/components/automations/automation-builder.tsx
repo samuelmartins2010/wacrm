@@ -139,6 +139,8 @@ const TRIGGER_OPTIONS: { value: AutomationTriggerType }[] = [
   { value: "new_contact_created" },
   { value: "conversation_assigned" },
   { value: "tag_added" },
+  // time_based never fired (D3): hidden from new automations; kept in the
+  // list only for an automation that already uses it (see TriggerCard).
   { value: "time_based" },
 ]
 
@@ -853,7 +855,7 @@ function TriggerCard({
                 onChange={(e) => onTypeChange(e.target.value as AutomationTriggerType)}
                 className="w-full rounded-md border border-border bg-muted px-2 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none"
               >
-                {TRIGGER_OPTIONS.map((o) => (
+                {TRIGGER_OPTIONS.filter((o) => o.value !== "time_based" || type === "time_based").map((o) => (
                   <option key={o.value} value={o.value}>
                     {t(`triggers.${o.value}.label`)}
                   </option>
@@ -887,6 +889,9 @@ function TriggerCard({
             )}
             {type === "time_based" && (
               <div>
+                <p className="mb-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-300">
+                  {t("timeBasedDeprecated")}
+                </p>
                 <label className="mb-1 block text-xs font-medium text-muted-foreground">
                   {t("schedule")}
                 </label>
