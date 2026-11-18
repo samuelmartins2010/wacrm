@@ -35,6 +35,7 @@
 
 import { INTERACTIVE_LIMITS } from "@/lib/whatsapp/meta-api";
 import { regexProblem } from "./collect-validation";
+import { referencedVars } from "./vars";
 
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
@@ -154,6 +155,27 @@ export function validateFlowForActivation(
     }
   }
 
+  // F4: {{vars.x}} that no collect_input sets renders as empty text.
+  const capturedKeys = new Set(
+    nodes
+      .filter((n) => n.node_type === "collect_input")
+      .map((n) => (n.config as { var_key?: string }).var_key)
+      .filter((k): k is string => !!k),
+  );
+  for (const n of nodes) {
+    const unknown = new Set(textFieldsOf(n).flatMap(referencedVars).filter((k) => !capturedKeys.has(k)));
+    for (const name of unknown) {
+      issues.push({
+        severity: "warning",
+        scope: "node",
+        node_key: n.node_key,
+        message: t
+          ? t("varUnknown", { name })
+          : `Variable "{{vars.${name}}}" is not captured by any collect-input node and will be sent empty.`,
+      });
+    }
+  }
+
   // Loops that never stop to wait for the customer would make the
   // engine send message after message in one go (F1). Every cycle must
   // pass through a node that suspends the run.
@@ -171,6 +193,27 @@ export function validateFlowForActivation(
   }
 
   return issues;
+}
+
+/** Customer-facing texts of a node that may contain {{vars.x}}. */
+function textFieldsOf(n: NodeInput): string[] {
+  const c = n.config as Record<string, unknown>;
+  const pick = (...keys: string[]) => keys.map((k) => c[k]).filter((v): v is string => typeof v === "string");
+  switch (n.node_type) {
+    case "send_message":
+      return pick("text");
+    case "collect_input":
+      return pick("prompt_text");
+    case "send_buttons":
+    case "send_list":
+      return pick("text", "header_text", "footer_text");
+    case "send_media":
+      return pick("caption");
+    case "handoff":
+      return pick("note");
+    default:
+      return [];
+  }
 }
 
 /** Nodes that suspend the run until the customer replies. */

@@ -1302,7 +1302,8 @@
         "unknownNodeType": "Unknown node type \"{type}\".",
         "cycleWithoutWait": "Loop that never waits for the customer: {path}. Add a node that waits for a reply (buttons, list or collect input).",
         "collectInputRegexMissing": "Regex validation needs a regular expression.",
-        "collectInputRegexInvalid": "The regular expression is invalid."
+        "collectInputRegexInvalid": "The regular expression is invalid.",
+        "varUnknown": "Variable \"'{{'vars.{name}'}}'\" is not captured by any collect-input node and will be sent empty."
       }
     },
     "editorState": {

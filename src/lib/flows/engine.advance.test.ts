@@ -104,3 +104,57 @@ describe("collect_input validation in the runner (D9)", () => {
     expect(sent.map((s) => s.args.text)).toEqual(["Obrigado ana@empresa.com"]);
   });
 });
+
+describe("{{vars.x}} interpolation (F4)", () => {
+  const vars = { nome: "Ana" };
+
+  it("is applied to buttons (body, header, footer)", async () => {
+    const { db } = fakeFlowDb();
+    const nodes = nodeMap(
+      node("start", "start", { next_node_key: "menu" }),
+      node("menu", "send_buttons", {
+        text: "{{vars.nome}}, escolha:",
+        header_text: "Oi {{ vars.nome }}",
+        footer_text: "Para {{vars.nome}}",
+        buttons: [{ reply_id: "a", title: "A", next_node_key: "start" }],
+      }),
+    );
+    await advanceFromNodeKey(db as never, run({ vars }), "start", nodes);
+    expect(sent[0].args).toMatchObject({ bodyText: "Ana, escolha:", headerText: "Oi Ana", footerText: "Para Ana" });
+  });
+
+  it("is applied to lists", async () => {
+    const { db } = fakeFlowDb();
+    const nodes = nodeMap(
+      node("start", "start", { next_node_key: "lista" }),
+      node("lista", "send_list", {
+        text: "{{vars.nome}}, veja:",
+        button_label: "Ver",
+        sections: [{ rows: [{ reply_id: "r", title: "R", next_node_key: "start" }] }],
+      }),
+    );
+    await advanceFromNodeKey(db as never, run({ vars }), "start", nodes);
+    expect(sent[0].args).toMatchObject({ bodyText: "Ana, veja:" });
+  });
+
+  it("accepts spaces inside the braces", async () => {
+    const { db } = fakeFlowDb();
+    const nodes = nodeMap(
+      node("start", "start", { next_node_key: "m" }),
+      node("m", "send_message", { text: "Prazer, {{ vars.nome }}!", next_node_key: "fim" }),
+      node("fim", "end", {}),
+    );
+    await advanceFromNodeKey(db as never, run({ vars }), "start", nodes);
+    expect(sent[0].args.text).toBe("Prazer, Ana!");
+  });
+
+  it("is applied to the handoff note", async () => {
+    const { db, writes } = fakeFlowDb();
+    const nodes = nodeMap(
+      node("start", "start", { next_node_key: "h" }),
+      node("h", "handoff", { note: "Lead: {{vars.nome}}" }),
+    );
+    await advanceFromNodeKey(db as never, run({ vars }), "start", nodes);
+    expect(writes.events.find((e) => e.event_type === "handoff")?.payload.note).toBe("Lead: Ana");
+  });
+});

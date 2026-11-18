@@ -41,6 +41,7 @@ import {
 } from "./meta-send";
 import { decideFallback, resolveFallbackPolicy } from "./fallback";
 import { isValidCollectedInput } from "./collect-validation";
+import { interpolateVars } from "./vars";
 import {
   type CollectInputNodeConfig,
   type ConditionNodeConfig,
@@ -365,9 +366,9 @@ async function sendButtonsAndSuspend(
     userId: run.user_id,
     conversationId: run.conversation_id!,
     contactId: run.contact_id!,
-    bodyText: cfg.text,
-    headerText: cfg.header_text,
-    footerText: cfg.footer_text,
+    bodyText: interpolateVars(cfg.text, run.vars),
+    headerText: cfg.header_text ? interpolateVars(cfg.header_text, run.vars) : undefined,
+    footerText: cfg.footer_text ? interpolateVars(cfg.footer_text, run.vars) : undefined,
     buttons: cfg.buttons.map((b) => ({ id: b.reply_id, title: b.title })),
   });
   await logEvent(db, run.id, "message_sent", node.node_key, {
@@ -401,10 +402,10 @@ async function sendListAndSuspend(
     userId: run.user_id,
     conversationId: run.conversation_id!,
     contactId: run.contact_id!,
-    bodyText: cfg.text,
+    bodyText: interpolateVars(cfg.text, run.vars),
     buttonLabel: cfg.button_label,
-    headerText: cfg.header_text,
-    footerText: cfg.footer_text,
+    headerText: cfg.header_text ? interpolateVars(cfg.header_text, run.vars) : undefined,
+    footerText: cfg.footer_text ? interpolateVars(cfg.footer_text, run.vars) : undefined,
     sections: cfg.sections.map((s) => ({
       title: s.title,
       rows: s.rows.map((r) => ({
@@ -471,7 +472,7 @@ async function executeHandoff(
       .eq("id", run.conversation_id);
   }
   await logEvent(db, run.id, "handoff", node.node_key, {
-    note: cfg.note ?? null,
+    note: cfg.note ? interpolateVars(cfg.note, run.vars) : null,
     assigned_to: cfg.assign_to ?? null,
   });
   await endRun(db, run.id, "handed_off", "handoff_node");
@@ -530,19 +531,6 @@ async function evaluateConditionNode(
   });
 }
 
-/**
- * Tiny `{{vars.foo}}` interpolation. Used by send_message + collect_input
- * prompt text so a captured `name` can show up in the next prompt
- * ("Thanks {{vars.name}}, what's your email?"). Missing vars render as
- * empty string — the same behavior as the automations engine.
- */
-function interpolateVars(template: string, vars: Record<string, unknown>): string {
-  if (!template) return "";
-  return template.replace(/\{\{vars\.([a-zA-Z0-9_]+)\}\}/g, (_, key) => {
-    const v = vars[key];
-    return v === undefined || v === null ? "" : String(v);
-  });
-}
 
 async function endRun(
   db: AdminClient,

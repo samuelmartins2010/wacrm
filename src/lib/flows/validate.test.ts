@@ -620,3 +620,24 @@ describe("collect_input regex validation at save (D9)", () => {
     expect(errors({ validation: "phone" })).toHaveLength(0);
   });
 });
+
+describe("unknown {{vars.x}} at save (F4)", () => {
+  const flow = { name: "f", trigger_type: "keyword" as const, trigger_config: { keywords: ["x"] }, entry_node_id: "start" };
+  const nodes = (text: string) => [
+    { node_key: "start", node_type: "start", config: { next_node_key: "ask" } },
+    { node_key: "ask", node_type: "collect_input", config: { prompt_text: "Nome?", var_key: "nome", next_node_key: "msg" } },
+    { node_key: "msg", node_type: "send_message", config: { text, next_node_key: "fim" } },
+    { node_key: "fim", node_type: "end", config: {} },
+  ];
+  const varWarnings = (text: string) =>
+    validateFlowForActivation(flow, nodes(text)).filter((i) => i.severity === "warning" && /variable/i.test(i.message));
+
+  it("warns about a variable no collect_input sets", () => {
+    const w = varWarnings("Oi {{vars.nome}}, seu pedido {{ vars.pedido }}");
+    expect(w).toHaveLength(1);
+    expect(w[0].message).toMatch(/pedido/);
+  });
+  it("does not warn for captured variables", () => {
+    expect(varWarnings("Oi {{ vars.nome }}")).toHaveLength(0);
+  });
+});
