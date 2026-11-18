@@ -1,0 +1,51 @@
+-- 041_reactivation_candidates.sql
+-- Uma linha por contato que já mandou mensagem, com o que a
+-- elegibilidade da reativação precisa (spec 5.2). SECURITY INVOKER:
+-- chamada pelo cliente do usuário, o RLS das tabelas vale; pelo
+-- service role, quem chama já validou a conta.
+
+CREATE OR REPLACE FUNCTION reactivation_candidates(p_account_id UUID)
+RETURNS TABLE (
+  contact_id               UUID,
+  name                     TEXT,
+  phone                    TEXT,
+  company                  TEXT,
+  do_not_contact           BOOLEAN,
+  last_inbound_at          TIMESTAMPTZ,
+  tag_ids                  UUID[],
+  has_active_enrollment    BOOLEAN,
+  last_enrollment_ended_at TIMESTAMPTZ,
+  last_outbound_at         TIMESTAMPTZ
+)
+LANGUAGE sql
+STABLE
+SET search_path = public
+AS $$
+  SELECT
+    c.id,
+    c.name,
+    c.phone,
+    c.company,
+    c.do_not_contact,
+    c.last_inbound_at,
+    COALESCE(
+      (SELECT array_agg(ct.tag_id) FROM contact_tags ct WHERE ct.contact_id = c.id),
+      '{}'::uuid[]
+    ),
+    EXISTS (
+      SELECT 1 FROM reactivation_enrollments e
+      WHERE e.contact_id = c.id AND e.status IN ('pending', 'active')
+    ),
+    (SELECT MAX(e.ended_at) FROM reactivation_enrollments e WHERE e.contact_id = c.id),
+    (
+      SELECT MAX(m.created_at)
+      FROM conversations cv
+      JOIN messages m ON m.conversation_id = cv.id
+      WHERE cv.contact_id = c.id AND m.sender_type IN ('agent', 'bot')
+    )
+  FROM contacts c
+  WHERE c.account_id = p_account_id
+    AND c.last_inbound_at IS NOT NULL
+$$;
+
+GRANT EXECUTE ON FUNCTION reactivation_candidates(UUID) TO authenticated, service_role;

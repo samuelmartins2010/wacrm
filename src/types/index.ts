@@ -108,6 +108,14 @@ export interface Contact {
   email?: string;
   company?: string;
   avatar_url?: string;
+  /** Opted out of bulk sends (reactivation + broadcasts). Migration 040. */
+  do_not_contact?: boolean;
+  do_not_contact_at?: string | null;
+  do_not_contact_source?: 'reativacao_sair' | 'manual' | null;
+  /** Who last changed do_not_contact (migration 044). */
+  do_not_contact_by?: string | null;
+  /** Last message received from this contact (any conversation). */
+  last_inbound_at?: string | null;
   created_at: string;
   updated_at: string;
   /** Hydrated by queries that embed `contact_tags(tags(*))` (e.g. the
@@ -643,6 +651,110 @@ export interface QuickReply {
   content_text?: string | null;
   /** Set when `kind === 'interactive'`. */
   interactive_payload?: InteractiveMessagePayload | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================================
+// Reactivation (migration 040)
+// ============================================================
+
+export type ReactivationBand = 'late' | 'cooling' | 'gone';
+
+/** Hours are [open, close) in America/Sao_Paulo; null = closed. */
+export interface SendWindow {
+  mon_fri: [number, number] | null;
+  sat: [number, number] | null;
+  sun: [number, number] | null;
+}
+
+export interface ReactivationSettings {
+  account_id: string;
+  band_late_days: number;
+  band_cooling_days: number;
+  band_gone_days: number;
+  rest_days: number;
+  recent_outbound_days: number;
+  daily_limit: number;
+  send_window: SendWindow;
+  optout_keywords: string[];
+  optout_reply: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type ReactivationParam =
+  | { source: 'first_name' | 'name' | 'company' }
+  | { source: 'fixed'; value: string };
+
+export interface ReactivationStep {
+  template_id: string;
+  params: ReactivationParam[];
+  wait_days: number;
+}
+
+export type ReactivationCampaignStatus = 'draft' | 'active' | 'paused' | 'finished';
+
+export interface ReactivationCampaign {
+  id: string;
+  account_id: string;
+  name: string;
+  status: ReactivationCampaignStatus;
+  pause_reason: string | null;
+  bands: ReactivationBand[];
+  tag_ids: string[];
+  exclude_tag_ids: string[];
+  steps: ReactivationStep[];
+  send_window: SendWindow | null;
+  created_by: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ReactivationEnrollmentStatus =
+  | 'pending'
+  | 'active'
+  | 'replied'
+  | 'completed'
+  | 'opted_out'
+  | 'failed'
+  | 'removed'
+  | 'cancelled';
+
+export interface ReactivationEnrollment {
+  id: string;
+  account_id: string;
+  campaign_id: string;
+  contact_id: string;
+  status: ReactivationEnrollmentStatus;
+  current_step: number;
+  next_run_at: string | null;
+  replied_at: string | null;
+  replied_step: number | null;
+  ended_at: string | null;
+  end_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ReactivationSendStatus = 'sent' | 'delivered' | 'read' | 'failed';
+
+export interface ReactivationSend {
+  id: string;
+  account_id: string;
+  enrollment_id: string;
+  step: number;
+  attempts: number;
+  attempted_at?: string;
+  whatsapp_message_id: string | null;
+  message_id: string | null;
+  status: ReactivationSendStatus;
+  error: string | null;
+  /** Numeric Meta error code (sync response or status webhook). */
+  error_code?: number | null;
   created_at: string;
   updated_at: string;
 }

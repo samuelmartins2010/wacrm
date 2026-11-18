@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { isOptedOutPhone, loadOptedOut } from '@/lib/reactivation/opt-out'
 import { createClient } from '@/lib/supabase/server'
 import { sendTemplateMessage } from '@/lib/whatsapp/meta-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
@@ -47,6 +48,8 @@ interface BroadcastResult {
  */
 interface NewRecipient {
   phone: string
+  /** Contact row this phone came from (dashboard sends); used for opt-out. */
+  contact_id?: string
   /** Body variable values, one per {{N}}. Legacy field. */
   params?: string[]
   /**
@@ -175,6 +178,19 @@ export async function POST(request: Request) {
     }
     const templateRow = rawTemplateRow ?? null
 
+    // Contacts who opted out of bulk sends (Reativação "SAIR" or manual).
+    // Fails closed: if the check errors, nothing is sent.
+    let optedOut: Awaited<ReturnType<typeof loadOptedOut>>
+    try {
+      optedOut = await loadOptedOut(supabase, accountId)
+    } catch (err) {
+      console.error('[broadcast] opt-out check failed:', err)
+      return NextResponse.json(
+        { error: 'Could not verify opted-out contacts. Nothing was sent.' },
+        { status: 500 }
+      )
+    }
+
     const results: BroadcastResult[] = []
     let sentCount = 0
     let failedCount = 0
@@ -187,6 +203,19 @@ export async function POST(request: Request) {
           phone: recipient.phone,
           status: 'failed',
           error: 'Invalid phone number format',
+        })
+        failedCount++
+        continue
+      }
+
+      if (
+        (recipient.contact_id && optedOut.ids.has(recipient.contact_id)) ||
+        isOptedOutPhone(sanitized, optedOut.keys)
+      ) {
+        results.push({
+          phone: recipient.phone,
+          status: 'failed',
+          error: 'opted_out',
         })
         failedCount++
         continue

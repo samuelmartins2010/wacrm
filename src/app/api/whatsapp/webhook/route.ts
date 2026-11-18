@@ -6,8 +6,16 @@ import { normalizePhone } from '@/lib/whatsapp/phone-utils'
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
+import { engineSendText } from '@/lib/automations/meta-send'
+import {
+  handleReactivationInbound,
+  handleReactivationReaction,
+  mirrorReactivationStatus,
+  supabaseInboundStore,
+} from '@/lib/reactivation/inbound'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
+import { planAutomationTriggers, shouldRunAiReply, shouldRunFlows } from '@/lib/whatsapp/inbound-plan'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
   handleTemplateWebhookChange,
@@ -80,6 +88,8 @@ interface WhatsAppWebhookEntry {
         status: string
         timestamp: string
         recipient_id: string
+        /** Present on status=failed: Meta's reason (code + message). */
+        errors?: Array<{ code?: number; title?: string; message?: string; error_data?: { details?: string } }>
       }>
     }
     field: string
@@ -354,6 +364,7 @@ async function handleStatusUpdate(status: {
   status: string
   timestamp: string
   recipient_id: string
+  errors?: Array<{ code?: number; title?: string; message?: string; error_data?: { details?: string } }>
 }) {
   // 1) Mirror onto messages (legacy behavior) — Meta's status values
   //    already match the CHECK constraint on messages.status. No
@@ -406,6 +417,24 @@ async function handleStatusUpdate(status: {
     if (recUpdateErr) {
       console.error('Error updating broadcast recipient status:', recUpdateErr)
     }
+  }
+
+  // 2b) Mirror onto reactivation_sends (best-effort).
+  try {
+    const metaError = status.errors?.[0]
+    await mirrorReactivationStatus(
+      supabaseInboundStore(supabaseAdmin()),
+      status.id,
+      status.status,
+      metaError
+        ? {
+            code: metaError.code ?? null,
+            message: metaError.error_data?.details || metaError.message || metaError.title || null,
+          }
+        : null,
+    )
+  } catch (err) {
+    console.error('mirrorReactivationStatus failed:', err)
   }
 
   // 3) Webhook fan-out for messages we store (inbox / API sends).
@@ -608,6 +637,20 @@ async function processMessage(
   // Done before parseMessageContent so the media-URL fetch is skipped.
   if (message.type === 'reaction') {
     await handleReaction(message, conversation.id, contactRecord.id)
+    // Reativação (D1): reação a um toque conta como resposta. Só mexe na
+    // inscrição; continua saindo antes de fluxos, automações e I.A.
+    if (message.reaction?.message_id) {
+      try {
+        await handleReactivationReaction(
+          supabaseInboundStore(supabaseAdmin()),
+          message.reaction.message_id,
+          message.reaction.emoji,
+          new Date(),
+        )
+      } catch (err) {
+        console.error('handleReactivationReaction failed:', err)
+      }
+    }
     return
   }
 
@@ -707,6 +750,29 @@ async function processMessage(
   // trigger installed in migration 003).
   await flagBroadcastReplyIfAny(accountId, contactRecord.id)
 
+  // Reativação: atualiza last_inbound_at, trata SAIR e encerra a
+  // sequência de quem respondeu. Best-effort, como o flag acima.
+  // Um SAIR tratado (consumed) já foi respondido com a confirmação:
+  // fluxos, automações e I.A não rodam para esta mensagem.
+  let reactivationConsumed = false
+  try {
+    const reactivation = await handleReactivationInbound(
+      supabaseInboundStore(supabaseAdmin()),
+      {
+        accountId,
+        contactId: contactRecord.id,
+        conversationId: conversation.id,
+        text: contentText ?? null,
+        configOwnerUserId,
+        now: new Date(),
+      },
+      { sendText: engineSendText, dryRun: process.env.REACTIVATION_DRY_RUN === 'true' },
+    )
+    reactivationConsumed = reactivation.consumed
+  } catch (err) {
+    console.error('handleReactivationInbound failed:', err)
+  }
+
   // ============================================================
   // Flow runner dispatch.
   //
@@ -726,26 +792,28 @@ async function processMessage(
   // no active flows take the runner's early-exit "no_match" path
   // basically for free (one indexed SELECT for the active run).
   // ============================================================
-  const flowResult = await dispatchInboundToFlows({
-    accountId,
-    userId: configOwnerUserId,
-    contactId: contactRecord.id,
-    conversationId: conversation.id,
-    message:
-      interactiveReplyId
-        ? {
-            kind: 'interactive_reply',
-            reply_id: interactiveReplyId,
-            reply_title: contentText ?? '',
-            meta_message_id: message.id,
-          }
-        : {
-            kind: 'text',
-            text: contentText ?? message.text?.body ?? '',
-            meta_message_id: message.id,
-          },
-    isFirstInboundMessage,
-  })
+  const flowResult = !shouldRunFlows({ reactivationConsumed })
+    ? { consumed: false }
+    : await dispatchInboundToFlows({
+        accountId,
+        userId: configOwnerUserId,
+        contactId: contactRecord.id,
+        conversationId: conversation.id,
+        message:
+          interactiveReplyId
+            ? {
+                kind: 'interactive_reply',
+                reply_id: interactiveReplyId,
+                reply_title: contentText ?? '',
+                meta_message_id: message.id,
+              }
+            : {
+                kind: 'text',
+                text: contentText ?? message.text?.body ?? '',
+                meta_message_id: message.id,
+              },
+        isFirstInboundMessage,
+      })
   const flowConsumed = flowResult.consumed
 
   // Fire any automations that react to this webhook event. All dispatches
@@ -754,33 +822,19 @@ async function processMessage(
   // Fire-and-forget: a slow or failing automation must not block the
   // webhook's 200 OK response to Meta.
   const inboundText = contentText ?? message.text?.body ?? ''
-  const automationTriggers: (
-    | 'new_contact_created'
-    | 'first_inbound_message'
-    | 'new_message_received'
-    | 'keyword_match'
-    | 'interactive_reply'
-  )[] = []
-  // Content-level triggers are suppressed when a flow consumed the
-  // message — see the comment block above.
-  if (!flowConsumed) {
-    automationTriggers.push('new_message_received', 'keyword_match')
-    // Interactive tap → fire the interactive_reply trigger too (only
-    // meaningful when a button/list reply actually arrived). Enables
-    // automation-only chained menus; when a Flow owns the menu it will
-    // have consumed the reply and this is skipped.
-    if (interactiveReplyId) {
-      automationTriggers.push('interactive_reply')
-    }
+  const plan = {
+    reactivationConsumed,
+    flowConsumed,
+    interactiveReplyId,
+    contactWasCreated: contactOutcome.wasCreated,
+    isFirstInboundMessage,
+    text: inboundText,
   }
-  // new_contact_created fires only when the webhook just auto-created the
-  // contact row. first_inbound_message fires whenever this is the contact's
-  // first-ever customer-sent message — a superset that also catches
-  // manually-imported contacts sending for the first time. We dispatch both
-  // so users can pick whichever semantic they want; an automation that
-  // listens to only one trigger runs only when that trigger matches.
-  if (contactOutcome.wasCreated) automationTriggers.unshift('new_contact_created')
-  if (isFirstInboundMessage) automationTriggers.unshift('first_inbound_message')
+  // Content-level triggers are suppressed when a flow consumed the
+  // message; nothing fires for an opt-out the Reativação consumed.
+  // new_contact_created / first_inbound_message are relationship
+  // triggers (see planAutomationTriggers).
+  const automationTriggers = planAutomationTriggers(plan)
   for (const triggerType of automationTriggers) {
     runAutomationsForTrigger({
       accountId,
@@ -801,7 +855,7 @@ async function processMessage(
   // the account has enabled it. Awaited inside `after()` (same reason as
   // the webhook dispatch below); `dispatchInboundToAiReply` owns its
   // eligibility gates + try/catch and never throws.
-  if (!flowConsumed && !interactiveReplyId && inboundText.trim()) {
+  if (shouldRunAiReply(plan)) {
     await dispatchInboundToAiReply({
       accountId,
       conversationId: conversation.id,

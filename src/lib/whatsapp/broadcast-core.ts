@@ -28,6 +28,7 @@ import {
 } from '@/lib/whatsapp/phone-utils';
 import { isMessageTemplate } from '@/lib/whatsapp/template-row-guard';
 import type { MessageTemplate } from '@/types';
+import { loadOptedOut, partitionBroadcastRecipients } from '@/lib/reactivation/opt-out';
 import { findOrCreateContact } from '@/lib/api/v1/contacts';
 
 /** Thrown by createBroadcast on a caller-visible failure; route maps it. */
@@ -72,6 +73,8 @@ export interface BroadcastPlan {
   planned: PlannedRecipient[];
   /** Phones rejected up front (invalid E.164) — counted as failed. */
   rejected: number;
+  /** Contacts skipped because they opted out of bulk sends. */
+  optedOut: number;
 }
 
 const MAX_RECIPIENTS = 1000;
@@ -185,6 +188,36 @@ export async function createBroadcast(
     );
   }
 
+  // Contacts who opted out of bulk sends (Reativação "SAIR" or manual)
+  // are skipped and reported alongside `rejected`.
+  // Opted out by contact_id, or by any form of the phone (9º dígito,
+  // 0 do DDD) when the API caller's number matched a different contact
+  // row. Fails closed: if the check errors, nothing is sent.
+  let optedOutSets: Awaited<ReturnType<typeof loadOptedOut>>;
+  try {
+    optedOutSets = await loadOptedOut(db, accountId);
+  } catch (err) {
+    throw new BroadcastError(
+      'opt_out_check_failed',
+      `Could not verify opted-out contacts: ${err instanceof Error ? err.message : String(err)}`,
+      500
+    );
+  }
+  const partition = partitionBroadcastRecipients(
+    deduped.map((r) => ({ ...r, contact_id: r.contactId })),
+    optedOutSets.ids,
+    optedOutSets.keys
+  );
+  const kept = partition.allowed;
+  const optedOut = partition.optedOut.length;
+  if (kept.length === 0) {
+    throw new BroadcastError(
+      'bad_request',
+      'All recipients opted out of campaigns (do_not_contact)',
+      400
+    );
+  }
+
   // Persist the broadcast + its recipients. The count columns
   // (sent/delivered/read/replied/failed) are owned by the DB aggregate
   // trigger (migrations 003/005) and derived purely from
@@ -202,7 +235,7 @@ export async function createBroadcast(
       template_name: templateName,
       template_language: templateLanguage,
       status: 'sending',
-      total_recipients: deduped.length,
+      total_recipients: kept.length,
     })
     .select('id')
     .single();
@@ -214,7 +247,7 @@ export async function createBroadcast(
   const { data: recipientRows, error: rErr } = await db
     .from('broadcast_recipients')
     .insert(
-      deduped.map((r) => ({
+      kept.map((r) => ({
         broadcast_id: broadcast.id,
         contact_id: r.contactId,
         status: 'pending' as const,
@@ -228,7 +261,7 @@ export async function createBroadcast(
 
   // Pair each inserted recipient row back to its phone/params by
   // contact_id — unambiguous now that duplicates are collapsed.
-  const byContact = new Map(deduped.map((r) => [r.contactId, r]));
+  const byContact = new Map(kept.map((r) => [r.contactId, r]));
   const planned: PlannedRecipient[] = recipientRows.map((row) => {
     const r = byContact.get(row.contact_id as string)!;
     return { recipientRowId: row.id as string, phone: r.phone, params: r.params };
@@ -243,6 +276,7 @@ export async function createBroadcast(
     templateRow,
     planned,
     rejected,
+    optedOut,
   };
 }
 

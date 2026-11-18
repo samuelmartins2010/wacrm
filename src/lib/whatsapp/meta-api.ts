@@ -24,18 +24,40 @@ export interface MetaPhoneInfo {
 }
 
 interface MetaErrorResponse {
-  error?: { message?: string; code?: number; type?: string }
+  error?: { message?: string; code?: number; error_subcode?: number; type?: string }
+}
+
+/**
+ * Error from the Graph API. `message` stays Meta's text (callers and
+ * logs already rely on it); `code` / `subcode` carry the numeric error
+ * so callers can classify without parsing text.
+ */
+export class MetaApiError extends Error {
+  readonly code?: number
+  readonly subcode?: number
+  readonly httpStatus: number
+  constructor(message: string, httpStatus: number, code?: number, subcode?: number) {
+    super(message)
+    this.name = 'MetaApiError'
+    this.httpStatus = httpStatus
+    this.code = code
+    this.subcode = subcode
+  }
 }
 
 async function throwMetaError(response: Response, fallback: string): Promise<never> {
   let message = fallback
+  let code: number | undefined
+  let subcode: number | undefined
   try {
     const data = (await response.json()) as MetaErrorResponse
     if (data.error?.message) message = data.error.message
+    if (typeof data.error?.code === 'number') code = data.error.code
+    if (typeof data.error?.error_subcode === 'number') subcode = data.error.error_subcode
   } catch {
     // response body wasn't JSON — keep the fallback
   }
-  throw new Error(message)
+  throw new MetaApiError(message, response.status, code, subcode)
 }
 
 // ============================================================
@@ -337,6 +359,8 @@ export interface SendTemplateMessageArgs {
   to: string
   templateName: string
   language?: string
+  /** Abort the Graph call after this many ms (no timeout when omitted). */
+  timeoutMs?: number
   /**
    * Legacy body-only params. Kept for backward compat with callers
    * that haven't migrated to the structured `template` + `messageParams`
@@ -386,6 +410,7 @@ export async function sendTemplateMessage(
     template,
     messageParams,
     contextMessageId,
+    timeoutMs,
   } = args
   const url = `${META_API_BASE}/${phoneNumberId}/messages`
 
@@ -429,6 +454,7 @@ export async function sendTemplateMessage(
   }
 
   const response = await fetch(url, {
+    signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

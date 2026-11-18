@@ -55,7 +55,8 @@
     "defaultAvatar": "Avatar",
     "menuProfile": "Perfil",
     "menuSettings": "Configurações",
-    "menuSignOut": "Sair"
+    "menuSignOut": "Sair",
+    "reactivation": "Reativação"
   },
   "Header": {
     "dashboard": "Painel",
@@ -72,7 +73,8 @@
     "defaultAvatar": "Avatar",
     "menuProfile": "Perfil",
     "menuSettings": "Configurações",
-    "menuSignOut": "Sair"
+    "menuSignOut": "Sair",
+    "reactivation": "Reativação"
   },
   "ModeToggle": {
     "switchMode": "Mudar para o modo {mode}"
@@ -2037,5 +2039,179 @@
     "oneDayLeft": "Último dia do seu teste grátis.",
     "lastDay": "Seu teste grátis termina hoje.",
     "contactSupport": "Falar com o suporte"
+  },
+  "Reactivation": {
+    "nav": {
+      "panel": "Painel",
+      "campaigns": "Campanhas",
+      "settings": "Ajustes"
+    },
+    "title": "Reativação",
+    "subtitle": "Encontre contatos que pararam de conversar e traga-os de volta com uma sequência de mensagens.",
+    "bands": {
+      "late": "Atrasado",
+      "cooling": "Esfriando",
+      "gone": "Sumido"
+    },
+    "bandHint": {
+      "late": "{days}+ dias sem falar",
+      "cooling": "{days}+ dias sem falar",
+      "gone": "{days}+ dias sem falar"
+    },
+    "exclusions": {
+      "do_not_contact": "Pediu para sair",
+      "invalid_phone": "Telefone inválido",
+      "in_active_campaign": "Já está em outra campanha",
+      "resting": "Descansando",
+      "recent_outbound": "Recebeu mensagem nos últimos {days} dias",
+      "removed": "Removido por você",
+      "eligible": "Elegível"
+    },
+    "campaignStatus": {
+      "draft": "Rascunho",
+      "active": "Ativa",
+      "paused": "Pausada",
+      "finished": "Encerrada"
+    },
+    "enrollmentStatus": {
+      "pending": "Aguardando",
+      "active": "Em andamento",
+      "replied": "Respondeu",
+      "completed": "Concluído",
+      "opted_out": "Saiu",
+      "failed": "Falhou",
+      "removed": "Removido",
+      "cancelled": "Cancelado"
+    },
+    "params": {
+      "first_name": "Primeiro nome",
+      "name": "Nome completo",
+      "company": "Empresa",
+      "fixed": "Texto fixo"
+    },
+    "common": {
+      "loading": "Carregando…",
+      "retry": "Tentar de novo",
+      "back": "Voltar",
+      "save": "Salvar",
+      "saved": "Salvo",
+      "error": "Algo deu errado.",
+      "noTags": "Nenhuma etiqueta"
+    },
+    "panel": {
+      "contacts": "Contatos inativos",
+      "name": "Nome",
+      "phone": "Telefone",
+      "days": "Dias sem falar",
+      "band": "Faixa",
+      "situation": "Situação",
+      "allTags": "Todas as etiquetas",
+      "filterTag": "Etiqueta",
+      "empty": "Nenhum contato inativo nessa faixa. Bom sinal!",
+      "createFromFilter": "Criar campanha com este filtro",
+      "page": "Página {page} de {pages}",
+      "prev": "Anterior",
+      "next": "Próxima",
+      "explain": "Contamos os dias desde a última mensagem que o contato enviou. Contatos que nunca escreveram não aparecem."
+    },
+    "campaigns": {
+      "title": "Campanhas de reativação",
+      "new": "Nova campanha",
+      "empty": "Nenhuma campanha ainda.",
+      "name": "Nome",
+      "status": "Status",
+      "audience": "Público",
+      "replied": "Responderam",
+      "inProgress": "Em andamento",
+      "created": "Criada em"
+    },
+    "wizard": {
+      "title": "Nova campanha de reativação",
+      "stepAudience": "Público",
+      "stepTouches": "Toques",
+      "stepReview": "Revisão",
+      "name": "Nome da campanha",
+      "namePlaceholder": "Ex.: Volta de novembro",
+      "bands": "Faixas de inatividade",
+      "includeTags": "Só contatos com estas etiquetas (opcional)",
+      "excludeTags": "Excluir contatos com estas etiquetas (opcional)",
+      "touch": "Toque {n}",
+      "addTouch": "Adicionar toque",
+      "removeTouch": "Remover",
+      "template": "Template aprovado",
+      "chooseTemplate": "Escolha um template",
+      "noTemplates": "Nenhum template aprovado sem cabeçalho de mídia. Crie e aprove um template em Configurações > Templates.",
+      "variable": "Variável {n}",
+      "fixedPlaceholder": "Texto",
+      "waitDays": "Esperar quantos dias antes deste toque",
+      "waitFirst": "Enviado assim que a campanha começar (respeitando horário e limite diário).",
+      "touchHint": "O contato só recebe o próximo toque se não tiver respondido. Quem responder sai da sequência e cai na Caixa de entrada.",
+      "next": "Continuar",
+      "review": "Revisar público",
+      "eligible": "{count, plural, =0 {Nenhum contato elegível} =1 {1 contato elegível} other {# contatos elegíveis}}",
+      "excluded": "{count, plural, =0 {Nenhum excluído} =1 {1 excluído} other {# excluídos}}",
+      "remove": "Remover",
+      "restore": "Recolocar",
+      "preview": "Prévia das mensagens",
+      "previewFor": "Exemplo para {name}",
+      "limits": "Envio gradual: até {limit} mensagens por dia na conta, em horário comercial. Ajuste em Reativação > Ajustes.",
+      "approve": "Aprovar e iniciar",
+      "approving": "Iniciando…",
+      "approveConfirm": "{count, plural, =1 {1 contato vai receber} other {# contatos vão receber}} a sequência. Depois de iniciar, o público não muda.",
+      "saveDraft": "Salvar rascunho",
+      "deleteDraft": "Excluir rascunho",
+      "adminOnly": "Só administradores criam e aprovam campanhas."
+    },
+    "detail": {
+      "audience": "Público",
+      "sent": "Toques enviados",
+      "delivered": "Entregues",
+      "read": "Lidos",
+      "replied": "Responderam",
+      "optedOut": "Saíram",
+      "failed": "Falhas",
+      "inProgress": "Em andamento",
+      "returned": "Voltaram sozinhos",
+      "pause": "Pausar",
+      "resume": "Retomar",
+      "finish": "Encerrar",
+      "finishConfirm": "Encerrar a campanha cancela os toques que ainda não saíram. Continuar?",
+      "paused": "Campanha pausada",
+      "contact": "Contato",
+      "status": "Status",
+      "step": "Toque",
+      "repliedAt": "Respondeu no toque",
+      "openChat": "Abrir conversa",
+      "editDraft": "Continuar editando",
+      "error": "Erro"
+    },
+    "settings": {
+      "title": "Ajustes da reativação",
+      "bands": "Faixas (dias sem o contato escrever)",
+      "late": "Atrasado a partir de",
+      "cooling": "Esfriando a partir de",
+      "gone": "Sumido a partir de",
+      "days": "dias",
+      "rest": "Descanso depois de uma campanha",
+      "recent": "Não incluir quem recebeu mensagem da empresa nos últimos",
+      "dailyLimit": "Limite de envios por dia (conta inteira)",
+      "window": "Horário de envio (horário de Brasília)",
+      "monFri": "Segunda a sexta",
+      "sat": "Sábado",
+      "sun": "Domingo",
+      "closed": "Não enviar",
+      "from": "das",
+      "to": "às",
+      "optout": "Palavras de saída (separe por vírgula)",
+      "optoutHint": "Vale só para quem está numa campanha de reativação ou recebeu um toque nos últimos 30 dias. A mensagem precisa ser exatamente a palavra.",
+      "optoutReply": "Resposta automática a quem pede para sair"
+    },
+    "contact": {
+      "doNotContact": "Não quer receber campanhas",
+      "doNotContactHint": "Fica fora de reativações e transmissões. Conversas normais continuam funcionando.",
+      "sourceOptout": "pediu pelo WhatsApp",
+      "sourceManual": "marcado manualmente",
+      "onlyAdminUnmark": "Só administradores podem desmarcar."
+    }
   }
 }
