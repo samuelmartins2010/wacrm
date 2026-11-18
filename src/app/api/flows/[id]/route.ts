@@ -2,14 +2,16 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { supabaseAdmin } from '@/lib/flows/admin-client'
+import { getTranslations } from 'next-intl/server'
+import { validateFlowSave } from '@/lib/flows/save'
 
 /**
  * GET   /api/flows/[id]  — fetch one flow with its nodes.
  * PUT   /api/flows/[id]  — replace name/trigger/entry/fallback + the
- *                          full node graph (delete-then-insert under
- *                          the hood; not atomic, but the runner is
- *                          resilient to mid-edit reads — node_not_found
- *                          gracefully ends the run).
+ *                          full node graph, atomically (replace_flow_nodes,
+ *                          migration 048). Saving an ACTIVE flow is
+ *                          revalidated first: blockers → 422, nothing
+ *                          written (D8).
  * DELETE /api/flows/[id] — hard delete (RLS+CASCADE clean up nodes,
  *                          runs, events).
  *
@@ -118,12 +120,35 @@ export async function PUT(
 
   const admin = supabaseAdmin()
 
-  // Update the flow row first — the body may not include `nodes` (a
-  // header-only save for editing the trigger config without touching
-  // the graph). Skip node replacement in that case.
-  const flowPatch: Record<string, unknown> = {
-    updated_at: new Date().toISOString(),
+  // D8: an ACTIVE flow must stay valid after the save. Validate the
+  // merged result first; on blockers answer 422 and write nothing.
+  const [{ data: currentFlow }, { data: currentNodes }] = await Promise.all([
+    admin
+      .from('flows')
+      .select('status, name, trigger_type, trigger_config, entry_node_id')
+      .eq('id', id)
+      .maybeSingle(),
+    admin.from('flow_nodes').select('node_key, node_type, config').eq('flow_id', id),
+  ])
+  if (!currentFlow) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
+  const t = await getTranslations('Flows.validation.messages')
+  const check = validateFlowSave(
+    currentFlow as Parameters<typeof validateFlowSave>[0],
+    body,
+    (currentNodes ?? []) as Parameters<typeof validateFlowSave>[2],
+    t,
+  )
+  if (!check.ok) {
+    const tApi = await getTranslations('Flows.api')
+    return NextResponse.json(
+      { error: tApi('saveBlocked'), issues: check.issues },
+      { status: 422 },
+    )
+  }
+
+  const flowPatch: Record<string, unknown> = {}
   if (body.name !== undefined) flowPatch.name = body.name.trim()
   if (body.description !== undefined)
     flowPatch.description = body.description
@@ -135,43 +160,25 @@ export async function PUT(
   if (body.fallback_policy !== undefined)
     flowPatch.fallback_policy = body.fallback_policy
 
-  const { error: updErr } = await admin
-    .from('flows')
-    .update(flowPatch)
-    .eq('id', id)
-  if (updErr) {
-    return NextResponse.json({ error: updErr.message }, { status: 500 })
+  // Metadata + node graph swap in one transaction (migration 048).
+  const { error: saveErr } = await admin.rpc('replace_flow_nodes', {
+    p_flow_id: id,
+    p_flow_patch: flowPatch,
+    p_nodes:
+      body.nodes === undefined
+        ? null
+        : body.nodes.map((n) => ({
+            node_key: n.node_key,
+            node_type: n.node_type,
+            config: n.config,
+            position_x: n.position_x ?? 0,
+            position_y: n.position_y ?? 0,
+          })),
+  })
+  if (saveErr) {
+    return NextResponse.json({ error: saveErr.message }, { status: 500 })
   }
 
-  if (body.nodes !== undefined) {
-    // Delete-then-insert. Not transactional but the runner handles
-    // mid-edit reads safely (a node_not_found ends the run cleanly).
-    const { error: delErr } = await admin
-      .from('flow_nodes')
-      .delete()
-      .eq('flow_id', id)
-    if (delErr) {
-      return NextResponse.json({ error: delErr.message }, { status: 500 })
-    }
-    if (body.nodes.length > 0) {
-      const { error: insErr } = await admin.from('flow_nodes').insert(
-        body.nodes.map((n) => ({
-          flow_id: id,
-          node_key: n.node_key,
-          node_type: n.node_type,
-          config: n.config,
-          position_x: n.position_x ?? 0,
-          position_y: n.position_y ?? 0,
-        })),
-      )
-      if (insErr) {
-        return NextResponse.json({ error: insErr.message }, { status: 500 })
-      }
-    }
-  }
-
-  // Re-fetch and return the new state — the editor uses the response
-  // to reconcile its local form state.
   const [{ data: flow }, { data: nodes }] = await Promise.all([
     admin.from('flows').select('*').eq('id', id).maybeSingle(),
     admin

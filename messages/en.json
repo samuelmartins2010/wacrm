@@ -1370,6 +1370,9 @@
           "handoffNote": "New lead — name='{{vars.name}}', email='{{vars.email}}', company='{{vars.company}}'."
         }
       }
+    },
+    "api": {
+      "saveBlocked": "Cannot save the active flow — fix the issues below first."
     }
   },
   "Settings": {

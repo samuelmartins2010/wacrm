@@ -256,7 +256,8 @@ async function logEvent(
     | "handoff"
     | "timeout"
     | "error"
-    | "completed",
+    | "completed"
+    | "node_removed",
   node_key: string | null,
   payload: Record<string, unknown> = {},
 ): Promise<void> {
@@ -428,6 +429,27 @@ async function sendListAndSuspend(
     })
     .eq("id", run.id);
   return { outcome: "advanced", node_key: node.node_key };
+}
+
+/**
+ * Hand a run over to a human: conversation → pending (optionally
+ * assigned) and the run ends as handed_off with `reason`.
+ */
+async function handOffRun(
+  db: AdminClient,
+  run: FlowRunRow,
+  reason: string,
+  assignTo?: string,
+): Promise<void> {
+  if (run.conversation_id) {
+    const convUpdate: Record<string, unknown> = {
+      status: "pending",
+      updated_at: new Date().toISOString(),
+    };
+    if (assignTo) convUpdate.assigned_agent_id = assignTo;
+    await db.from("conversations").update(convUpdate).eq("id", run.conversation_id);
+  }
+  await endRun(db, run.id, "handed_off", reason);
 }
 
 async function executeHandoff(
@@ -934,8 +956,14 @@ async function handleReplyForActiveRun(
 
   const currentNode = nodes.get(run.current_node_key) ?? null;
   if (!currentNode) {
-    await endRun(db, run.id, "failed", "current_node_not_found");
-    return { consumed: true, flow_run_id: run.id, outcome: "no_match" };
+    // D8: the flow was edited and the node this customer is waiting on
+    // is gone. Don't leave them without an answer: hand off to an agent
+    // and record why, visibly, in the runs viewer.
+    await logEvent(db, run.id, "node_removed", run.current_node_key, {
+      reason: "current_node_removed_by_edit",
+    });
+    await handOffRun(db, run, "node_removed");
+    return { consumed: true, flow_run_id: run.id, outcome: "handed_off" };
   }
 
   // Two ways a reply can advance:

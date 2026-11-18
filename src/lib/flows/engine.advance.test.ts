@@ -53,3 +53,22 @@ describe("advance loop message budget (F1)", () => {
     expect(r.outcome).toBe("completed");
   });
 });
+
+describe("reply on a node that no longer exists (D8)", () => {
+  it("hands off to an agent with a node_removed event instead of failing silently", async () => {
+    const { handleReplyForActiveRun } = __flowEngineTest;
+    const { db, writes } = fakeFlowDb();
+    const nodes = nodeMap(node("start", "start", { next_node_key: "fim" }), node("fim", "end", {}));
+    const r = await handleReplyForActiveRun(
+      db as never,
+      run({ current_node_key: "menu_apagado" }),
+      { kind: "interactive_reply", reply_id: "b1", reply_title: "B1", meta_message_id: "wamid.x" } as never,
+      nodes,
+    );
+    expect(r.outcome).toBe("handed_off");
+    const ev = writes.events.find((e) => e.event_type === "node_removed");
+    expect(ev?.node_key).toBe("menu_apagado");
+    expect(writes.runUpdates.at(-1)).toMatchObject({ status: "handed_off", end_reason: "node_removed" });
+    expect(writes.conversationUpdates.at(-1)).toMatchObject({ status: "pending" });
+  });
+});
