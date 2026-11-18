@@ -822,8 +822,16 @@ async function processMessage(
   // Fire-and-forget: a slow or failing automation must not block the
   // webhook's 200 OK response to Meta.
   const inboundText = contentText ?? message.text?.body ?? ''
+  // D7: re-read the handoff flag — a flow may have just handed this
+  // conversation to a human in dispatchInboundToFlows above.
+  const { data: convFlags } = await supabaseAdmin()
+    .from('conversations')
+    .select('bot_handoff_at')
+    .eq('id', conversation.id)
+    .maybeSingle()
   const plan = {
     reactivationConsumed,
+    botsSilenced: !!convFlags?.bot_handoff_at,
     flowConsumed,
     interactiveReplyId,
     contactWasCreated: contactOutcome.wasCreated,

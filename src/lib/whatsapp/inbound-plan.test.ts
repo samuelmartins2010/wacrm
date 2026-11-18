@@ -3,6 +3,7 @@ import { planAutomationTriggers, shouldRunAiReply, shouldRunFlows } from './inbo
 
 const base = {
   reactivationConsumed: false,
+  botsSilenced: false,
   flowConsumed: false,
   interactiveReplyId: null as string | null,
   contactWasCreated: false,
@@ -53,3 +54,19 @@ describe('ordinary messages keep today\'s behaviour', () => {
     expect(shouldRunAiReply({ ...base, text: '   ' })).toBe(false)
   })
 })
+
+describe('after a handoff the conversation is silenced (D7)', () => {
+  const silenced = { ...base, botsSilenced: true }
+  it('fires no content trigger, keeps relationship triggers', () => {
+    expect(planAutomationTriggers({ ...silenced, isFirstInboundMessage: true, interactiveReplyId: 'btn' })).toEqual([
+      'first_inbound_message',
+    ])
+  })
+  it('does not run the AI', () => {
+    expect(shouldRunAiReply(silenced)).toBe(false)
+  })
+  it('flows still run (a new keyword can start a flow)', () => {
+    expect(shouldRunFlows(silenced)).toBe(true)
+  })
+})
+

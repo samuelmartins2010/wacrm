@@ -444,9 +444,14 @@ async function handOffRun(
   assignTo?: string,
 ): Promise<void> {
   if (run.conversation_id) {
+    const now = new Date().toISOString();
+    // D7: a human owns the thread now — AI and content automations stay
+    // quiet until the conversation is closed or reopened (migration 049).
     const convUpdate: Record<string, unknown> = {
       status: "pending",
-      updated_at: new Date().toISOString(),
+      ai_autoreply_disabled: true,
+      bot_handoff_at: now,
+      updated_at: now,
     };
     if (assignTo) convUpdate.assigned_agent_id = assignTo;
     await db.from("conversations").update(convUpdate).eq("id", run.conversation_id);
@@ -460,22 +465,11 @@ async function executeHandoff(
   node: FlowNodeRow,
 ): Promise<void> {
   const cfg = node.config as { assign_to?: string; note?: string };
-  const convUpdate: Record<string, unknown> = {
-    status: "pending",
-    updated_at: new Date().toISOString(),
-  };
-  if (cfg.assign_to) convUpdate.assigned_agent_id = cfg.assign_to;
-  if (run.conversation_id) {
-    await db
-      .from("conversations")
-      .update(convUpdate)
-      .eq("id", run.conversation_id);
-  }
   await logEvent(db, run.id, "handoff", node.node_key, {
     note: cfg.note ? interpolateVars(cfg.note, run.vars) : null,
     assigned_to: cfg.assign_to ?? null,
   });
-  await endRun(db, run.id, "handed_off", "handoff_node");
+  await handOffRun(db, run, "handoff_node", cfg.assign_to);
 }
 
 /**
@@ -1070,16 +1064,10 @@ async function handleReplyForActiveRun(
     return { consumed: true, flow_run_id: run.id, outcome: "fallback_fired" };
   }
   if (action.type === "handoff") {
-    if (run.conversation_id) {
-      await db
-        .from("conversations")
-        .update({ status: "pending", updated_at: new Date().toISOString() })
-        .eq("id", run.conversation_id);
-    }
     await logEvent(db, run.id, "handoff", run.current_node_key, {
       reason: "fallback_exhausted",
     });
-    await endRun(db, run.id, "handed_off", "fallback_exhausted");
+    await handOffRun(db, run, "fallback_exhausted");
     return { consumed: true, flow_run_id: run.id, outcome: "handed_off" };
   }
   // action.type === 'end'

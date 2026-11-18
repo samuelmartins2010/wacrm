@@ -158,3 +158,28 @@ describe("{{vars.x}} interpolation (F4)", () => {
     expect(writes.events.find((e) => e.event_type === "handoff")?.payload.note).toBe("Lead: Ana");
   });
 });
+
+describe("handoff silences bots on the conversation (D7)", () => {
+  const { handleReplyForActiveRun } = __flowEngineTest;
+  const silencedUpdate = (u: Record<string, unknown>) =>
+    u.status === "pending" && u.ai_autoreply_disabled === true && typeof u.bot_handoff_at === "string";
+
+  it("handoff node", async () => {
+    const { db, writes } = fakeFlowDb();
+    const nodes = nodeMap(node("start", "start", { next_node_key: "h" }), node("h", "handoff", {}));
+    await advanceFromNodeKey(db as never, run(), "start", nodes);
+    expect(writes.conversationUpdates.some(silencedUpdate)).toBe(true);
+  });
+
+  it("fallback exhausted", async () => {
+    const { db, writes } = fakeFlowDb({ flows: { fallback_policy: { on_unknown_reply: "reprompt", max_reprompts: 2, on_timeout_hours: 24, on_exhaust: "handoff" } } });
+    const nodes = nodeMap(node("menu", "send_buttons", { text: "?", buttons: [{ reply_id: "a", title: "A", next_node_key: "menu" }] }));
+    await handleReplyForActiveRun(
+      db as never,
+      run({ current_node_key: "menu", reprompt_count: 2 }),
+      { kind: "text", text: "quero humano", meta_message_id: "wamid.h" } as never,
+      nodes,
+    );
+    expect(writes.conversationUpdates.some(silencedUpdate)).toBe(true);
+  });
+});
