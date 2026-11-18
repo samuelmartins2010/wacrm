@@ -422,6 +422,11 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<ScopeOutcome> {
         branch: taken ? 'yes' : 'no',
         startPosition: 0,
       })
+      // A5: a failed branch fails the whole run, like a top-level error.
+      if (branchOutcome === 'failed') {
+        await appendResults(args.logId, [], 'failed', null)
+        return 'failed'
+      }
       if (branchOutcome === 'suspended') return 'suspended'
       continue
     }

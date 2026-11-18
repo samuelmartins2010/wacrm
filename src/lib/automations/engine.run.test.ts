@@ -204,3 +204,17 @@ describe("A4: wait inside a condition branch", () => {
     expect(logs()[0].status).toBe("success");
   });
 });
+
+describe("A5: an error inside a condition branch stops the run as failed", () => {
+  it("does not run the steps after the condition and records failed", async () => {
+    seed([automation()], [
+      step("c", 0, "condition", { subject: "message_content", value: "oi" }),
+      step("bad", 0, "send_message", { text: "   " }, { parent_step_id: "c", branch: "yes" }),
+      step("d", 1, "send_message", { text: "depois" }),
+    ]);
+    await fire();
+    expect(h.sent).toEqual([]);
+    expect(logs()[0].status).toBe("failed");
+    expect(logs()[0].error_message).toMatch(/empty text/);
+  });
+});
