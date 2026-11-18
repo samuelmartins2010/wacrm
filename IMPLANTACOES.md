@@ -18,6 +18,38 @@ Modelo de entrada:
 
 ---
 
+## 2026-11-18: Correções de Automações e Fluxos
+- **Origem:** auditorias de Automações e de Fluxos (17/11) + decisões de produto do Samuel (D3–D9).
+- **Decisões de produto:**
+  - **D3:** `conversation_assigned` e `tag_added` passam a disparar (atribuição e etiqueta feitas pela tela, pela API e por passos de automação/fluxo). `time_based` sai da tela de criação (o tipo continua no banco); automações antigas com ele mostram aviso.
+  - **D4:** contato que responde durante um wait cancela o restante da automação, por padrão. Opção por automação "Continuar mesmo se o contato responder" (padrão desligada).
+  - **D5:** palavra-chave ignora maiúsculas e acentos; "contém" casa palavra inteira; "exata" ignora pontuação e espaços nas pontas. Vale para automações e fluxos.
+  - **D6:** várias automações com o mesmo gatilho rodam todas, em ordem garantida (`created_at`); a lista avisa quando há duplicidade.
+  - **D7:** depois de um handoff (nó handoff, fallback esgotado ou nó removido), I.A e automações de conteúdo (`new_message_received`, `keyword_match`, `interactive_reply`) ficam em silêncio naquela conversa até ela ser encerrada/reaberta.
+  - **D8:** salvar fluxo ativo revalida; se inválido, 422 e nada é gravado. A troca de nós é atômica. Execução cujo nó atual sumiu → handoff com evento `node_removed`.
+  - **D9:** `collect_input` aplica a validação (e-mail, telefone, regex); resposta inválida reenvia a pergunta (2 tentativas, depois atendente).
+- **O que mudou (um commit por item, branch `fix/automacoes-fluxos`):**
+  - F1 `3334b10` ciclo sem espera bloqueado na validação + no máximo 10 mensagens por avanço (antes: 63).
+  - F2 `67c4393` D8. F3 `b67a525` D9 (campo "Validar resposta" no nó). F4 `ba8dc95` `{{vars.x}}`/`{{ vars.x }}` em botões, listas e nota do handoff; aviso de variável inexistente.
+  - F5 `0784f01` D7. F6 `437ae97` falha avisada pelo webhook de status (ex.: 131053) vira evento `error/delivery_failed` na execução.
+  - F7 `1548ffa` limite de upload por tipo (imagem 5 MB, vídeo/áudio 16 MB, documento 100 MB), erro na tela antes do envio.
+  - F8 `5375274` execução ativa vencida é encerrada (`timed_out`/`stale_on_inbound`) pelo novo inbound, sem depender do cron.
+  - F9 `08bd371` frase do 422 de ativação em pt-BR/en, título "Fluxos" no header, datas e duração no idioma da tela.
+  - A1 `2431e0c` D4 + uma execução por automação/contato. A2 `0c6f328` automação desativada/apagada não retoma.
+  - A3 `0194ce0` `time_of_day` no fuso da conta (`accounts.timezone`, padrão America/Sao_Paulo).
+  - A4 `82cb9e2` wait dentro de condição pausa tudo; log "Aguardando". A5 `6c67688` erro em ramo interrompe e grava failed.
+  - A6 `6021c76` passos conferem a gravação (etiqueta/funil/etapa/agente/campo) e a tela recusa referência inexistente ao salvar.
+  - A8 `3e99f8c` D5. A9 `19cae2a` D6. A7 `dd4a0fd` D3 com proteção contra loop (profundidade 1).
+- **Banco (migrations):** 048 `replace_flow_nodes` + evento `node_removed`; 049 `conversations.bot_handoff_at` + trigger; 050 índice do wamid nos eventos; 051 buckets de mídia 100 MB; 052 `continue_on_reply`, status `cancelled`, uma espera aberta por automação/contato; 053 `accounts.timezone`; 054 status `waiting` no log; 055 `automation_trigger_events` + triggers em `contact_tags`/`conversations` + RPCs `automation_add_tag`, `automation_assign_conversation`, `claim_automation_trigger_events`.
+- **Arquivos principais:** `src/lib/flows/{engine,validate,save,collect-validation,vars,delivery,run-dates}.ts`, `src/lib/automations/{engine,references,duplicates,ping}.ts`, `src/lib/keywords.ts`, `src/app/api/whatsapp/webhook/route.ts`, `src/app/api/flows/[id]/route.ts`, `src/app/api/automations/events/route.ts`, `src/app/api/automations/cron/route.ts`.
+- **Como foi testado:** vitest 927/927 (TZ=UTC), pgTAP 51 asserts (7 arquivos), tsc e build ok. Ponta a ponta com webhook assinado, proxy local imitando a Meta (nada saiu da máquina; só 2 consultas do Next ao npm, bloqueadas), crons via curl e dev em TZ=UTC; resultado por item no relatório da tarefa. Limpeza conferida: base 4 contatos / 4 conversas / 7 mensagens.
+- **Pendências / riscos:**
+  - Convivência Reativação × fluxo (C1): resposta a um toque de quem está no meio de um fluxo cai no fluxo, que reenvia o menu; não corrigido (só relatado).
+  - Não há tela para mudar o fuso da conta (`accounts.timezone` só no banco/API).
+  - Importação de contatos com etiqueta dispara `tag_added` para cada contato (pelo cron); avaliar antes de usar automação de envio em `tag_added`.
+  - As mensagens de erro da validação de automações (`validate.ts`, `references.ts`) seguem em inglês, como já eram.
+  - Sem `supabase db reset` completo nesta rodada (as migrations 048–055 foram aplicadas em sequência sobre o banco local).
+
 ## 2026-11-17: Reativação: SAIR sem resposta dupla, trava da inscrição e .env do Mac
 - **Origem:** relatório de verificação (SAIR recebia confirmação + resposta da automação/I.A; trava da inscrição contava do início da rodada) e pedido do Samuel de separar as chaves de produção do Mac.
 - **O que mudou:**
