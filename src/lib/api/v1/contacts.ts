@@ -162,9 +162,7 @@ export async function setContactTags(
   accountId: string,
   auditUserId: string,
   contactId: string,
-  tagNames: string[],
-  /** D10: `bulk` = import (POST create) — adds tags without tag_added events. */
-  opts: { bulk?: boolean } = {}
+  tagNames: string[]
 ): Promise<void> {
   const { tagIdByKey } = await resolveImportTagIds(db, {
     accountId,
@@ -201,19 +199,13 @@ export async function setContactTags(
       .in('tag_id', toRemove);
     if (error) throw new ContactError('Failed to update contact tags', 500);
   }
-  if (toAdd.length > 0 && opts.bulk) {
-    // D10: creating/importing contacts through the API is a bulk path —
-    // no tag_added events (migration 056).
-    const { error } = await db.rpc('contact_tags_insert_bulk', {
-      p_rows: toAdd.map((tag_id) => ({ contact_id: contactId, tag_id })),
-    });
-    if (error) throw new ContactError('Failed to update contact tags', 500);
-  } else if (toAdd.length > 0) {
+  if (toAdd.length > 0) {
     const { error } = await db
       .from('contact_tags')
       .insert(toAdd.map((tag_id) => ({ contact_id: contactId, tag_id })));
     if (error) throw new ContactError('Failed to update contact tags', 500);
-    // D3: an individual change through the API (PATCH) fires tag_added.
+    // D3/D12: API changes are individual (POST of one contact, PATCH) and
+    // fire tag_added. Only CSV import and the bulk actions are silent (D10).
     await drainAutomationTriggerEvents(accountId);
   }
 }

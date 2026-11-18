@@ -72,7 +72,7 @@ vi.mock("@/lib/contacts/resolve-import-tags", async (orig) => ({
 }));
 vi.mock("@/lib/automations/engine", () => ({ drainAutomationTriggerEvents: async () => 0 }));
 
-describe("setContactTags — import vs individual (D10)", () => {
+describe("setContactTags — API changes are individual (D12)", () => {
   function fakeDb(current: string[]) {
     const calls: string[] = [];
     const db = {
@@ -89,15 +89,7 @@ describe("setContactTags — import vs individual (D10)", () => {
     return { db, calls };
   }
 
-  it("creating through the API (import) writes via contact_tags_insert_bulk", async () => {
-    const { setContactTags } = await import("./contacts");
-    const { db, calls } = fakeDb([]);
-    await setContactTags(db as never, "acc", "u", "c1", ["T"], { bulk: true });
-    expect(calls).toContain("rpc:contact_tags_insert_bulk");
-    expect(calls).not.toContain("insert:contact_tags");
-  });
-
-  it("changing one contact's tags (PATCH) is an individual change", async () => {
+  it("adding tags through the API writes contact_tags directly (fires tag_added)", async () => {
     const { setContactTags } = await import("./contacts");
     const { db, calls } = fakeDb([]);
     await setContactTags(db as never, "acc", "u", "c1", ["T"]);

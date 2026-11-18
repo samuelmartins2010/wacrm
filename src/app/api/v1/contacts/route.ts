@@ -130,8 +130,8 @@ export async function POST(request: Request) {
         ctx.accountId,
         auditUserId,
         id,
-        body.tags.filter((t): t is string => typeof t === 'string'),
-        { bulk: true } // D10: creating/importing contacts does not fire tag_added
+        // D12: creating ONE contact is an individual change — tag_added fires.
+        body.tags.filter((t): t is string => typeof t === 'string')
       );
     }
 
