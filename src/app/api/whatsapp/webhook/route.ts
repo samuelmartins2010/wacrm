@@ -16,6 +16,7 @@ import {
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { planAutomationTriggers, shouldRunAiReply, shouldRunFlows } from '@/lib/whatsapp/inbound-plan'
+import { recordFlowDeliveryFailure } from '@/lib/flows/delivery'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
   handleTemplateWebhookChange,
@@ -416,6 +417,20 @@ async function handleStatusUpdate(status: {
 
     if (recUpdateErr) {
       console.error('Error updating broadcast recipient status:', recUpdateErr)
+    }
+  }
+
+  // 2a) F6: a flow message that failed after Meta accepted it gets an
+  //     error event on its run (best-effort).
+  if (status.status === 'failed') {
+    try {
+      const e = status.errors?.[0]
+      await recordFlowDeliveryFailure(supabaseAdmin(), status.id, {
+        code: e?.code ?? null,
+        message: e?.error_data?.details || e?.message || e?.title || null,
+      })
+    } catch (err) {
+      console.error('recordFlowDeliveryFailure failed:', err)
     }
   }
 
