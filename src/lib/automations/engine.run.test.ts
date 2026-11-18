@@ -167,3 +167,40 @@ describe("minutesOfDayIn", () => {
     expect(minutesOfDayIn(at, "Not/AZone")).toBe(9 * 60 + 30);
   });
 });
+
+describe("A4: wait inside a condition branch", () => {
+  const nested = [
+    step("c", 0, "condition", { subject: "message_content", value: "oi" }),
+    step("a", 0, "send_message", { text: "a" }, { parent_step_id: "c", branch: "yes" }),
+    step("w", 1, "wait", { amount: 1, unit: "hours" }, { parent_step_id: "c", branch: "yes" }),
+    step("b", 2, "send_message", { text: "b" }, { parent_step_id: "c", branch: "yes" }),
+    step("d", 1, "send_message", { text: "depois" }),
+  ];
+
+  it("the step after the condition only runs after the wait, and the log is not 'success' meanwhile", async () => {
+    seed([automation()], nested);
+    await fire();
+    expect(h.sent).toEqual(["a"]);
+    expect(logs()[0].status).toBe("waiting");
+    await resumeDue();
+    expect(h.sent).toEqual(["a", "b", "depois"]);
+    expect(logs()[0].status).toBe("success");
+    expect(pendings()[0].status).toBe("done");
+  });
+
+  it("log steps stay in execution order", async () => {
+    seed([automation()], nested);
+    await fire();
+    await resumeDue();
+    const order = (logs()[0].steps_executed as { step_id: string }[]).map((r) => r.step_id);
+    expect(order).toEqual(["c", "a", "w", "b", "d"]);
+  });
+
+  it("a top-level wait also shows as waiting, then success", async () => {
+    seed([automation()], waitFlow);
+    await fire();
+    expect(logs()[0].status).toBe("waiting");
+    await resumeDue();
+    expect(logs()[0].status).toBe("success");
+  });
+});

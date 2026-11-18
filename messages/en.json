@@ -842,7 +842,8 @@
         "success": "success",
         "partial": "partial",
         "failed": "failed",
-        "cancelled": "Cancelled"
+        "cancelled": "Cancelled",
+        "waiting": "Waiting"
       },
       "back": "Back",
       "backAria": "Back"

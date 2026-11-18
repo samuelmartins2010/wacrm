@@ -468,7 +468,7 @@ export type AutomationStepType =
   | 'send_webhook'
   | 'close_conversation';
 
-export type AutomationLogStatus = 'success' | 'partial' | 'failed' | 'cancelled';
+export type AutomationLogStatus = 'success' | 'partial' | 'failed' | 'cancelled' | 'waiting';
 
 export interface KeywordMatchTriggerConfig {
   keywords: string[];

@@ -162,7 +162,7 @@ export async function resumePendingExecution(pending: {
   }
 
   try {
-    await executeStepsFrom({
+    const args: ExecuteArgs = {
       automation: automation as Automation,
       contactId: pending.contact_id,
       context: pending.context ?? {},
@@ -171,7 +171,9 @@ export async function resumePendingExecution(pending: {
       startPosition: pending.next_step_position,
       logId: pending.log_id,
       triggerEvent: 'resumed_wait',
-    })
+    }
+    const outcome = await executeStepsFrom(args)
+    if (outcome === 'completed' && args.parentStepId) await continueAfterBranch(args)
     await markPending(pending.id, 'done')
   } catch (err) {
     console.error('[automations] resume failed:', err)
@@ -313,8 +315,17 @@ interface ExecuteArgs {
   triggerEvent: string
 }
 
-async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
+/**
+ * How a scope (the top level or one condition branch) ended:
+ * - completed: every step ran; the enclosing scope continues;
+ * - suspended: a wait parked the run; nothing after it runs now (A4);
+ * - failed: a step threw; the whole run stops (A5).
+ */
+type ScopeOutcome = 'completed' | 'suspended' | 'failed'
+
+async function executeStepsFrom(args: ExecuteArgs): Promise<ScopeOutcome> {
   const db = supabaseAdmin()
+  const topLevel = args.parentStepId === null
 
   const baseQuery = db
     .from('automation_steps')
@@ -323,31 +334,32 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
     .gte('position', args.startPosition)
     .order('position', { ascending: true })
 
-  const scoped =
-    args.parentStepId === null
-      ? baseQuery.is('parent_step_id', null)
-      : baseQuery.eq('parent_step_id', args.parentStepId).eq('branch', args.branch ?? 'yes')
+  const scoped = topLevel
+    ? baseQuery.is('parent_step_id', null)
+    : baseQuery.eq('parent_step_id', args.parentStepId).eq('branch', args.branch ?? 'yes')
 
   const { data: steps, error: stepsErr } = await scoped
 
   if (stepsErr) {
     await finalizeLog(args.logId, 'failed', stepsErr.message)
-    return
+    return 'failed'
   }
   if (!steps || steps.length === 0) {
-    if (args.parentStepId === null && args.logId) {
-      await finalizeLog(args.logId, 'success', null)
-    }
-    return
+    if (topLevel && args.logId) await finalizeLog(args.logId, 'success', null)
+    return 'completed'
   }
 
-  const results: AutomationLogStepResult[] = []
-  let status: 'success' | 'partial' | 'failed' = 'success'
-  let errorMessage: string | null = null
+  // Results are flushed to the log before descending into a branch so
+  // steps_executed stays in execution order.
+  let results: AutomationLogStepResult[] = []
+  const flush = async () => {
+    if (results.length) await appendResults(args.logId, results, null, null)
+    results = []
+  }
 
   for (const step of steps as AutomationStep[]) {
-    // `wait` is the suspension point: enqueue and stop processing this
-    // scope. The cron endpoint will pick it up later.
+    // `wait` is the suspension point: enqueue and stop. The cron resumes
+    // this scope later and then climbs back to the enclosing scopes.
     if (step.step_type === 'wait') {
       const cfg = step.step_config as WaitStepConfig
       const ms = waitMs(cfg)
@@ -374,7 +386,7 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
             : `could not schedule the wait: ${waitErr.message}`
         results.push({ step_id: step.id, step_type: step.step_type, status: 'failed', detail: msg })
         await appendResults(args.logId, results, 'failed', msg)
-        return
+        return 'failed'
       }
       results.push({
         step_id: step.id,
@@ -382,59 +394,80 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
         status: 'success',
         detail: `waiting ${cfg.amount} ${cfg.unit}`,
       })
-      status = 'partial'
-      await appendResults(args.logId, results, status, errorMessage)
-      return
+      // A4: an open wait is never reported as success.
+      await appendResults(args.logId, results, 'waiting', null)
+      return 'suspended'
+    }
+
+    if (step.step_type === 'condition') {
+      let taken: boolean
+      try {
+        taken = await evaluateCondition(step.step_config as ConditionStepConfig, args)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        results.push({ step_id: step.id, step_type: 'condition', status: 'failed', detail: msg })
+        await appendResults(args.logId, results, 'failed', msg)
+        return 'failed'
+      }
+      results.push({
+        step_id: step.id,
+        step_type: 'condition',
+        status: 'success',
+        detail: `branch=${taken ? 'yes' : 'no'}`,
+      })
+      await flush()
+      const branchOutcome = await executeStepsFrom({
+        ...args,
+        parentStepId: step.id,
+        branch: taken ? 'yes' : 'no',
+        startPosition: 0,
+      })
+      if (branchOutcome === 'suspended') return 'suspended'
+      continue
     }
 
     try {
-      if (step.step_type === 'condition') {
-        const cfg = step.step_config as ConditionStepConfig
-        const taken = await evaluateCondition(cfg, args)
-        results.push({
-          step_id: step.id,
-          step_type: 'condition',
-          status: 'success',
-          detail: `branch=${taken ? 'yes' : 'no'}`,
-        })
-        // Recurse into the chosen branch at position 0 (children use their
-        // own ordering within the branch scope).
-        await executeStepsFrom({
-          ...args,
-          parentStepId: step.id,
-          branch: taken ? 'yes' : 'no',
-          startPosition: 0,
-          logId: args.logId,
-        })
-        continue
-      }
-
       const detail = await runStep(step, args)
-      results.push({
-        step_id: step.id,
-        step_type: step.step_type,
-        status: 'success',
-        detail,
-      })
+      results.push({ step_id: step.id, step_type: step.step_type, status: 'success', detail })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      results.push({
-        step_id: step.id,
-        step_type: step.step_type,
-        status: 'failed',
-        detail: msg,
-      })
-      status = 'failed'
-      errorMessage = msg
-      break
+      results.push({ step_id: step.id, step_type: step.step_type, status: 'failed', detail: msg })
+      await appendResults(args.logId, results, 'failed', msg)
+      return 'failed'
     }
   }
 
-  if (args.parentStepId === null) {
-    await appendResults(args.logId, results, status, errorMessage)
-  } else {
-    // Nested branch — just append results; parent scope decides final status.
-    await appendResults(args.logId, results, null, errorMessage)
+  // Only the top level decides the final status; a finished branch hands
+  // control back to its parent scope.
+  await appendResults(args.logId, results, topLevel ? 'success' : null, null)
+  return 'completed'
+}
+
+/**
+ * A4: after a wait inside a branch finishes, keep going in the enclosing
+ * scopes — the steps after the condition — up to the top level.
+ */
+async function continueAfterBranch(args: ExecuteArgs): Promise<void> {
+  let parentStepId = args.parentStepId
+  while (parentStepId) {
+    const { data: parent } = await supabaseAdmin()
+      .from('automation_steps')
+      .select('id, position, parent_step_id, branch')
+      .eq('id', parentStepId)
+      .maybeSingle()
+    if (!parent) {
+      await finalizeLog(args.logId, 'failed', 'condition step removed while waiting')
+      return
+    }
+    const p = parent as { position: number; parent_step_id: string | null; branch: 'yes' | 'no' | null }
+    const outcome = await executeStepsFrom({
+      ...args,
+      parentStepId: p.parent_step_id,
+      branch: p.branch,
+      startPosition: p.position + 1,
+    })
+    if (outcome !== 'completed') return
+    parentStepId = p.parent_step_id
   }
 }
 
@@ -839,7 +872,7 @@ function interpolate(s: string, args: ExecuteArgs): string {
 async function appendResults(
   logId: string | null,
   newItems: AutomationLogStepResult[],
-  status: 'success' | 'partial' | 'failed' | 'cancelled' | null,
+  status: 'success' | 'partial' | 'failed' | 'cancelled' | 'waiting' | null,
   errorMessage: string | null,
 ) {
   if (!logId) return

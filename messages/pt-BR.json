@@ -842,7 +842,8 @@
         "success": "sucesso",
         "partial": "parcial",
         "failed": "falhou",
-        "cancelled": "Cancelada"
+        "cancelled": "Cancelada",
+        "waiting": "Aguardando"
       },
       "back": "Voltar",
       "backAria": "Voltar"
