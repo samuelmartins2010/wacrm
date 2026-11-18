@@ -473,6 +473,7 @@ export type AutomationLogStatus = 'success' | 'partial' | 'failed' | 'cancelled'
 export interface KeywordMatchTriggerConfig {
   keywords: string[];
   match_type: 'exact' | 'contains';
+  /** @deprecated D5: ignored — matching never depends on case or accents. */
   case_sensitive?: boolean;
 }
 

@@ -120,13 +120,16 @@ describe("matchesKeywordTrigger", () => {
     expect(matchesKeywordTrigger("help me", cfg)).toBe(false);
   });
 
-  it("case_sensitive=true preserves case", () => {
-    const cfg = {
-      keywords: ["Support"],
-      case_sensitive: true,
-    };
-    expect(matchesKeywordTrigger("I need Support", cfg)).toBe(true);
-    expect(matchesKeywordTrigger("I need support", cfg)).toBe(false);
+  it("D5: case_sensitive is ignored — case and accents never matter", () => {
+    const cfg = { keywords: ["Suporte"], case_sensitive: true };
+    expect(matchesKeywordTrigger("preciso de suporte", cfg)).toBe(true);
+  });
+
+  it("D5: contains matches whole words, accents ignored", () => {
+    expect(matchesKeywordTrigger("foi bom", { keywords: ["oi"] })).toBe(false);
+    expect(matchesKeywordTrigger("Oi!", { keywords: ["oi"] })).toBe(true);
+    expect(matchesKeywordTrigger("qual o preco", { keywords: ["preço"] })).toBe(true);
+    expect(matchesKeywordTrigger("  Sim. ", { keywords: ["sim"], match_type: "exact" })).toBe(true);
   });
 
   it("matches any one of multiple keywords", () => {

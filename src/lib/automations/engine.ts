@@ -21,6 +21,7 @@ import { supabaseAdmin } from './admin-client'
 import { engineSendText, engineSendTemplate, engineSendInteractive } from './meta-send'
 import { validateInteractivePayload } from '@/lib/whatsapp/interactive'
 import { isDeliverableUrl } from '@/lib/webhooks/ssrf'
+import { keywordMatches } from '@/lib/keywords'
 
 // ------------------------------------------------------------
 // Public API
@@ -795,13 +796,8 @@ export function triggerMatches(automation: Automation, ctx: AutomationContext | 
   if (automation.trigger_type === 'keyword_match') {
     const cfg = automation.trigger_config as KeywordMatchTriggerConfig
     if (!cfg?.keywords || cfg.keywords.length === 0) return false
-    const text = (ctx?.message_text ?? '').toString()
-    if (!text) return false
-    const haystack = cfg.case_sensitive ? text : text.toLowerCase()
-    return cfg.keywords.some((raw) => {
-      const k = cfg.case_sensitive ? raw : raw.toLowerCase()
-      return cfg.match_type === 'exact' ? haystack === k : haystack.includes(k)
-    })
+    // D5: shared rule with flows (src/lib/keywords.ts).
+    return keywordMatches((ctx?.message_text ?? '').toString(), cfg.keywords, cfg.match_type)
   }
 
   // Match on the tapped button / list-row id (exact). Lets multi-step

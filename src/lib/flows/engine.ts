@@ -42,6 +42,7 @@ import {
 import { decideFallback, resolveFallbackPolicy } from "./fallback";
 import { isValidCollectedInput } from "./collect-validation";
 import { interpolateVars } from "./vars";
+import { keywordMatches } from "@/lib/keywords";
 import {
   type CollectInputNodeConfig,
   type ConditionNodeConfig,
@@ -90,25 +91,16 @@ export function matchReplyId(
 }
 
 /**
- * Case-insensitive contains/exact match against a list of keywords.
- * Used by the trigger evaluator. Stable enough that the v3 builder
- * UI can preview matches by passing canned strings.
+ * Keyword trigger match — D5 rule shared with automations
+ * (src/lib/keywords.ts): case/accents ignored, "contains" = whole words,
+ * "exact" ignores surrounding punctuation. `case_sensitive` is ignored.
  */
 export function matchesKeywordTrigger(
   text: string,
   cfg: KeywordTriggerConfig,
 ): boolean {
   if (!text || !cfg.keywords?.length) return false;
-  const matchType = cfg.match_type ?? "contains";
-  const haystack = cfg.case_sensitive ? text : text.toLowerCase();
-  for (const raw of cfg.keywords) {
-    if (!raw) continue;
-    const needle = cfg.case_sensitive ? raw : raw.toLowerCase();
-    if (matchType === "exact" ? haystack === needle : haystack.includes(needle)) {
-      return true;
-    }
-  }
-  return false;
+  return keywordMatches(text, cfg.keywords, cfg.match_type ?? "contains");
 }
 
 /** Nodes that advance to a next_node_key without waiting for input. */
