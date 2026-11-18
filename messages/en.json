@@ -822,7 +822,8 @@
         "updateError": "Failed to update",
         "duplicateError": "Failed to duplicate",
         "deleteError": "Failed to delete"
-      }
+      },
+      "sameTriggerWarning": "Same trigger as: {others}. All of them run, in creation order — this one is #{order} of {total}."
     },
     "edit": {
       "loading": "Loading...",

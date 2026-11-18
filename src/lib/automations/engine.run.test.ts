@@ -282,3 +282,20 @@ describe("A6: write steps check what they wrote", () => {
     expect(log.error_message).toMatch(/not writable/);
   });
 });
+
+describe("A9/D6: several automations with the same trigger all run, in created_at order", () => {
+  it("runs both, oldest first, regardless of storage order", async () => {
+    seed(
+      [
+        automation({ id: "new", created_at: "2026-03-01T00:00:00Z" }),
+        automation({ id: "old", created_at: "2026-01-01T00:00:00Z" }),
+      ],
+      [
+        { ...step("n1", 0, "send_message", { text: "nova" }), automation_id: "new" },
+        { ...step("o1", 0, "send_message", { text: "antiga" }), automation_id: "old" },
+      ],
+    );
+    await fire();
+    expect(h.sent).toEqual(["antiga", "nova"]);
+  });
+});

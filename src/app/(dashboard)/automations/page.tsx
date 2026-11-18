@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import {
@@ -43,6 +43,7 @@ import {
 import { AUTOMATION_TEMPLATES, type TemplateSlug } from "@/lib/automations/templates"
 import { triggerMeta, formatRelative } from "@/lib/automations/trigger-meta"
 import { cn } from "@/lib/utils"
+import { sameTriggerWarnings, type SameTriggerWarning } from "@/lib/automations/duplicates"
 
 const TEMPLATE_ORDER: TemplateSlug[] = [
   "welcome_message",
@@ -64,6 +65,11 @@ export default function AutomationsPage() {
   const t = useTranslations("Automations.list")
   const tTemplates = useTranslations("Automations.templates")
   const [automations, setAutomations] = useState<Automation[] | null>(null)
+  // D6: active automations that fire on the same event all run, oldest first.
+  const duplicates = useMemo(
+    () => sameTriggerWarnings((automations ?? []) as Parameters<typeof sameTriggerWarnings>[0]),
+    [automations],
+  )
   const [error, setError] = useState<string | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Automation | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -220,6 +226,7 @@ export default function AutomationsPage() {
             <AutomationCard
               key={a.id}
               automation={a}
+              duplicate={duplicates.get(a.id)}
               onToggle={(next) => toggleActive(a, next)}
               onEdit={() => router.push(`/automations/${a.id}/edit`)}
               onDuplicate={() => duplicate(a)}
@@ -264,6 +271,7 @@ export default function AutomationsPage() {
 
 function AutomationCard({
   automation,
+  duplicate,
   onToggle,
   onEdit,
   onDuplicate,
@@ -272,6 +280,7 @@ function AutomationCard({
   t,
 }: {
   automation: Automation
+  duplicate?: SameTriggerWarning
   onToggle: (next: boolean) => void
   onEdit: () => void
   onDuplicate: () => void
@@ -326,6 +335,15 @@ function AutomationCard({
             <span aria-hidden>·</span>
             <span>{t("lastRun", { time: formatRelative(automation.last_executed_at) })}</span>
           </div>
+          {duplicate && (
+            <p className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-300">
+              {t("sameTriggerWarning", {
+                others: duplicate.others.join(", "),
+                order: duplicate.order,
+                total: duplicate.total,
+              })}
+            </p>
+          )}
         </button>
 
         <div className="flex items-center gap-3">
