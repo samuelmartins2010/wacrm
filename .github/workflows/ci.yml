@@ -46,6 +46,11 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # Every t('...') key used in src/ must exist in messages/pt-BR.json
+      # and messages/en.json — a missing key fails the PR.
+      - name: Translation keys
+        run: npm run i18n:check
+
       - name: Test
         run: npm test
 

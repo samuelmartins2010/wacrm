@@ -1030,7 +1030,8 @@
       "cronPlaceholder": "Expressão cron ou HH:mm",
       "continueOnReply": "Continuar mesmo se o contato responder",
       "continueOnReplyHelp": "Desligado (padrão): se o contato mandar mensagem durante uma espera, o restante desta automação é cancelado.",
-      "timeBasedDeprecated": "O gatilho \"Baseado em horário\" não está funcionando e não pode mais ser escolhido. Esta automação nunca dispara — troque o gatilho ou desative-a."
+      "timeBasedDeprecated": "O gatilho \"Baseado em horário\" não está funcionando e não pode mais ser escolhido. Esta automação nunca dispara — troque o gatilho ou desative-a.",
+      "delete": "Excluir"
     },
     "templates": {
       "welcome_message": {
