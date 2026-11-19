@@ -191,6 +191,8 @@ export interface Conversation {
   ai_autoreply_disabled?: boolean;
   /** D7: set when a flow handed the thread to a human; cleared on close/reopen (migration 049). */
   bot_handoff_at?: string | null;
+  /** Desde quando o cliente espera resposta humana (migration 057). */
+  awaiting_since?: string | null;
   ai_reply_count?: number;
   ai_handoff_summary?: string | null;
 }
@@ -264,6 +266,8 @@ export interface Message {
    * badge in the inbox. Migration 033.
    */
   ai_generated?: boolean;
+  /** Enviada pela API v1: conta como robô (não zera a espera). */
+  sent_via_api?: boolean;
 }
 
 export type ReactionActor = 'customer' | 'agent';
