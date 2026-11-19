@@ -56,3 +56,38 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  db:
+    name: Banco (migrations + pgTAP)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 3.2.0
+
+      # Sobe só o que as migrations precisam: Postgres, Auth (auth.users /
+      # auth.uid) e Storage (storage.buckets / storage.objects). Num runner
+      # novo o banco começa vazio, então o `start` aplica 001→último do zero.
+      # O kong (gateway) fica porque as checagens de saúde do Auth e do
+      # Storage passam por ele.
+      - name: Subir Supabase local (só banco)
+        run: >
+          supabase start
+          -x postgrest,realtime,studio,mailpit,postgres-meta,imgproxy,vector,logflare,supavisor,edge-runtime
+
+      # Confere que TODAS as migrations do repositório foram aplicadas.
+      - name: Conferir migrations aplicadas
+        run: |
+          esperado=$(ls supabase/migrations/*.sql | wc -l)
+          aplicadas=$(docker exec supabase_db_wacrm psql -U postgres -d postgres -At \
+            -c "select count(*) from supabase_migrations.schema_migrations")
+          ultima=$(docker exec supabase_db_wacrm psql -U postgres -d postgres -At \
+            -c "select max(version) from supabase_migrations.schema_migrations")
+          echo "arquivos: $esperado | aplicadas: $aplicadas | última: $ultima"
+          test "$esperado" = "$aplicadas"
+
+      # Qualquer assert do pgTAP que falhar reprova o job (exit != 0).
+      - name: Testes de banco (pgTAP)
+        run: supabase test db
