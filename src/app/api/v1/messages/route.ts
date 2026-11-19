@@ -124,6 +124,8 @@ export async function POST(request: Request) {
           typeof body.reply_to_message_id === 'string'
             ? body.reply_to_message_id
             : null,
+        // API v1 conta como robô: não zera a espera do cliente no Inbox.
+        sentViaApi: true,
       }
     );
 
