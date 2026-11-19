@@ -464,34 +464,34 @@ export function ContactDetailView({
 
             {/* Tabs */}
             <Tabs defaultValue="details" className="flex-1 flex flex-col min-h-0">
-              <TabsList className="bg-muted/50 border-b border-border mx-4 mt-3 w-auto flex-wrap justify-start gap-1 group-data-horizontal/tabs:h-auto">
+              <TabsList className="bg-muted/50 border-b border-border mx-4 mt-3 w-auto h-auto! flex-wrap justify-start gap-1">
                 <TabsTrigger
                   value="details"
-                  className="flex-none px-2.5 data-active:bg-muted data-active:text-primary text-muted-foreground"
+                  className="flex-none h-7! px-2.5 data-active:bg-muted data-active:text-primary text-muted-foreground"
                 >
                   {t('tabs.details')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="tags"
-                  className="flex-none px-2.5 data-active:bg-muted data-active:text-primary text-muted-foreground"
+                  className="flex-none h-7! px-2.5 data-active:bg-muted data-active:text-primary text-muted-foreground"
                 >
                   {t('tabs.tags')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="notes"
-                  className="flex-none px-2.5 data-active:bg-muted data-active:text-primary text-muted-foreground"
+                  className="flex-none h-7! px-2.5 data-active:bg-muted data-active:text-primary text-muted-foreground"
                 >
                   {t('tabs.notes')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="custom"
-                  className="flex-none px-2.5 data-active:bg-muted data-active:text-primary text-muted-foreground"
+                  className="flex-none h-7! px-2.5 data-active:bg-muted data-active:text-primary text-muted-foreground"
                 >
                   {t('tabs.custom')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="deals"
-                  className="flex-none px-2.5 data-active:bg-muted data-active:text-primary text-muted-foreground"
+                  className="flex-none h-7! px-2.5 data-active:bg-muted data-active:text-primary text-muted-foreground"
                 >
                   {t('tabs.deals')}
                 </TabsTrigger>
