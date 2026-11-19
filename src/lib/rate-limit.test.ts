@@ -98,7 +98,12 @@ describe("RATE_LIMITS presets", () => {
     __resetRateLimitForTests();
     // Importing here so the presets stay close to their assertions.
     const { RATE_LIMITS } = await import("./rate-limit");
-    expect(RATE_LIMITS.send.limit).toBeGreaterThan(RATE_LIMITS.broadcast.limit);
+    // Esgotar o orçamento de transmissão não bloqueia o envio individual.
+    for (let i = 0; i < RATE_LIMITS.broadcast.limit; i++) {
+      checkRateLimit("broadcast:u1", RATE_LIMITS.broadcast);
+    }
+    expect(checkRateLimit("broadcast:u1", RATE_LIMITS.broadcast).success).toBe(false);
+    expect(checkRateLimit("send:u1", RATE_LIMITS.send).success).toBe(true);
     expect(RATE_LIMITS.send.windowMs).toBe(60_000);
     expect(RATE_LIMITS.broadcast.windowMs).toBe(60_000);
   });

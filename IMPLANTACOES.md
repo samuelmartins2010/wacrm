@@ -48,6 +48,18 @@ Checklist para tirar a produção da pausa (VPS + Supabase cloud). Siga na ordem
 
 ---
 
+## 2026-11-19: Transmissões com mais de 1.000 contatos e mais de 50 por minuto
+- **Origem:** bug "Todos os contatos" sem paginação (pedido do Samuel), branch `fix/broadcast-paginacao`.
+- **O que mudou:**
+  - **Paginação.** O Supabase corta toda resposta em 1.000 linhas sem avisar (`max_rows`). O envio lia o público e os destinatários de uma vez só, então só os primeiros 1.000 recebiam. Pior: a lista de quem tem etiqueta excluída também era cortada, e quem passava do milésimo **recebia** mesmo estando excluído. Agora toda leitura é paginada (ordem estável por id) e toda busca por lista de ids/telefones (etiquetas, campo personalizado, CSV) vai em lotes de 200.
+  - **Limite da rota.** `/api/whatsapp/broadcast` aceitava 5 chamadas/min por usuário, mas o assistente faz uma chamada por lote de 10 contatos a cada segundo: do 6º lote em diante tudo voltava 429 e era marcado "falhou" (na prática, só uns 50 contatos recebiam). O limite foi para 90/min (o assistente faz ≤ 60) e, se vier 429 mesmo assim, o assistente espera o tempo pedido e reenvia o mesmo lote (até 3 vezes).
+  - Quem pediu para sair continua de fora: o filtro do servidor (`loadOptedOut`, já paginado) não mudou.
+- **Banco (migrations):** nenhuma.
+- **Arquivos principais:** `src/lib/broadcasts/audience-query.ts` (novo), `src/lib/broadcasts/send-batch.ts` (novo), `src/hooks/use-broadcast-sending.ts`, `src/lib/broadcasts/audience-count.ts` (usa os mesmos ajudantes), `src/lib/rate-limit.ts`.
+- **Como testar:** `npx vitest run src/lib/broadcasts src/lib/rate-limit.test.ts` (banco falso que corta em 1.000 linhas e recusa `in` grande; 429 seguido de 200). Ponta a ponta local feito em 2026-11-19: ver o PR.
+- **Commit/branch:** `fix/broadcast-paginacao`.
+- **Pendências / riscos:** o envio continua rodando no navegador (fechar a aba no meio interrompe; já era assim). O limitador é em memória por processo (ok para a VPS única).
+
 ## 2026-11-19: Reativação não espera fluxo vencido (D11 + F8)
 - **Origem:** pedido do Samuel depois do PR #2.
 - **O que mudou:** na rechecagem antes do envio (D11), um `flow_run` ativo que já passou do `on_timeout_hours` do fluxo (padrão 24 h) **não adia** o toque: é a mesma regra do F8, que já trata essa execução como abandonada quando chega mensagem nova. Se o contato tiver ao menos uma execução ainda dentro do prazo, o toque continua adiado. A execução vencida não é encerrada pela Reativação; quem encerra continua sendo o `/api/flows/cron` ou a próxima mensagem do contato (F8).

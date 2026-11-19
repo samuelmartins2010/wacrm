@@ -117,10 +117,13 @@ export const RATE_LIMITS = {
   /** Individual message send. 60/min per user = one per second
    *  sustained, comfortable for a live human typing. */
   send: { limit: 60, windowMs: 60_000 },
-  /** Broadcast dispatch. 5/min per user — even a 1 000-recipient
-   *  broadcast is one call; this caps the rate at which a single user
-   *  can launch campaigns, not the messages inside one. */
-  broadcast: { limit: 5, windowMs: 60_000 },
+  /** Broadcast dispatch. O assistente de transmissões chama a rota uma
+   *  vez por lote de 10 contatos, com 1 s entre lotes (≈ 60 chamadas/min;
+   *  ver `@/lib/broadcasts/send-batch`). 90/min comporta esse ritmo com
+   *  folga e ainda corta um cliente que dispare sem pausa. O limite
+   *  antigo (5/min) fazia tudo depois do 5º lote voltar 429 e ser
+   *  marcado como falho. */
+  broadcast: { limit: 90, windowMs: 60_000 },
   /** Reaction add/swap/remove. More permissive than send — users
    *  fidget with reactions and a single "swap" is actually two calls
    *  (remove + add) under the hood. */
