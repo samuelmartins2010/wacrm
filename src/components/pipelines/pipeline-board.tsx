@@ -21,6 +21,7 @@ import { Plus } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { formatCurrency } from "@/lib/currency";
 import { useTranslations } from "next-intl";
+import { useDndA11y } from "./use-dnd-a11y";
 
 interface PipelineBoardProps {
   stages: PipelineStage[];
@@ -37,6 +38,7 @@ export function PipelineBoard({
   onAddDeal,
   onEditDeal,
 }: PipelineBoardProps) {
+  const dndA11y = useDndA11y();
   const { defaultCurrency } = useAuth();
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
 
@@ -92,6 +94,7 @@ export function PipelineBoard({
   return (
     <DndContext
       sensors={sensors}
+      accessibility={dndA11y}
       collisionDetection={closestCorners}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}

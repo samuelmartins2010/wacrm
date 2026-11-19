@@ -596,7 +596,8 @@
       "toastMoveOrDeleteDeals": "Move or delete deals in this stage first",
       "toastFailedDeleteStage": "Failed to delete stage",
       "toastFailedDeletePipeline": "Failed to delete pipeline",
-      "toastDeleted": "Pipeline deleted"
+      "toastDeleted": "Pipeline deleted",
+      "toastNotAllowed": "You are not allowed to change this pipeline. Ask an admin."
     },
     "analytics": {
       "totalDeals": "Total Deals",
@@ -612,6 +613,24 @@
       "lostThisMonth": "Lost This Month",
       "lostThisMonthTooltip": "Deals marked as Lost since the first day of the current month.",
       "howCalculated": "How {label} is calculated"
+    },
+    "defaultPipeline": {
+      "name": "Sales Pipeline",
+      "stages": {
+        "newLead": "New Lead",
+        "qualified": "Qualified",
+        "proposalSent": "Proposal Sent",
+        "negotiation": "Negotiation",
+        "won": "Won"
+      }
+    },
+    "dnd": {
+      "instructions": "To pick up an item, press space or enter. Use the arrow keys to move it and press space or enter again to drop it. Press escape to cancel.",
+      "dragStart": "Item picked up.",
+      "dragOver": "Item over a new position.",
+      "dragOverNone": "Item is not over a valid position.",
+      "dragEnd": "Item dropped.",
+      "dragCancel": "Dragging was cancelled. The item was returned."
     }
   },
   "Broadcasts": {

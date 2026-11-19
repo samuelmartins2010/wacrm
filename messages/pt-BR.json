@@ -596,7 +596,8 @@
       "toastMoveOrDeleteDeals": "Mova ou exclua os negócios desta etapa primeiro",
       "toastFailedDeleteStage": "Falha ao excluir etapa",
       "toastFailedDeletePipeline": "Falha ao excluir funil",
-      "toastDeleted": "Funil excluído"
+      "toastDeleted": "Funil excluído",
+      "toastNotAllowed": "Sem permissão para alterar este funil. Peça a um administrador."
     },
     "analytics": {
       "totalDeals": "Total de negócios",
@@ -612,6 +613,24 @@
       "lostThisMonth": "Perdidos este mês",
       "lostThisMonthTooltip": "Negócios marcados como Perdidos desde o primeiro dia do mês atual.",
       "howCalculated": "Como {label} é calculado"
+    },
+    "defaultPipeline": {
+      "name": "Funil de vendas",
+      "stages": {
+        "newLead": "Novo lead",
+        "qualified": "Qualificado",
+        "proposalSent": "Proposta enviada",
+        "negotiation": "Negociação",
+        "won": "Ganho"
+      }
+    },
+    "dnd": {
+      "instructions": "Para pegar um item, pressione espaço ou Enter. Use as setas para mover e espaço ou Enter de novo para soltar. Esc cancela.",
+      "dragStart": "Item selecionado.",
+      "dragOver": "Item sobre uma nova posição.",
+      "dragOverNone": "Item fora de uma posição válida.",
+      "dragEnd": "Item solto.",
+      "dragCancel": "Movimento cancelado. O item voltou ao lugar."
     }
   },
   "Broadcasts": {
