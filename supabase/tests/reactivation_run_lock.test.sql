@@ -2,7 +2,7 @@
 begin;
 select plan(6);
 select ok(reactivation_try_lock('00000000-0000-0000-0000-00000000aaaa', 60), 'primeira rodada pega a trava');
-select ok(reactivation_try_lock('00000000-0000-0000-0000-00000000bbbb', 60), 'segunda rodada simultânea não pega');
+select ok(not reactivation_try_lock('00000000-0000-0000-0000-00000000bbbb', 60), 'segunda rodada simultânea não pega');
 select ok(reactivation_try_lock('00000000-0000-0000-0000-00000000aaaa', 60), 'o dono pode renovar');
 select reactivation_release_lock('00000000-0000-0000-0000-00000000bbbb');
 select ok(not reactivation_try_lock('00000000-0000-0000-0000-00000000bbbb', 60), 'quem não é dono não solta a trava');
