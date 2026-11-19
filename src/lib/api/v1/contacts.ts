@@ -8,6 +8,7 @@
 // ============================================================
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { drainAutomationTriggerEvents } from '@/lib/automations/engine';
 
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe';
 import { resolveImportTagIds } from '@/lib/contacts/resolve-import-tags';
@@ -203,6 +204,9 @@ export async function setContactTags(
       .from('contact_tags')
       .insert(toAdd.map((tag_id) => ({ contact_id: contactId, tag_id })));
     if (error) throw new ContactError('Failed to update contact tags', 500);
+    // D3/D12: API changes are individual (POST of one contact, PATCH) and
+    // fire tag_added. Only CSV import and the bulk actions are silent (D10).
+    await drainAutomationTriggerEvents(accountId);
   }
 }
 

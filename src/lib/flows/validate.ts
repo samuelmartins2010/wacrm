@@ -34,6 +34,8 @@
  */
 
 import { INTERACTIVE_LIMITS } from "@/lib/whatsapp/meta-api";
+import { regexProblem } from "./collect-validation";
+import { referencedVars } from "./vars";
 
 type Translator = (key: string, values?: Record<string, string | number>) => string;
 
@@ -153,7 +155,103 @@ export function validateFlowForActivation(
     }
   }
 
+  // F4: {{vars.x}} that no collect_input sets renders as empty text.
+  const capturedKeys = new Set(
+    nodes
+      .filter((n) => n.node_type === "collect_input")
+      .map((n) => (n.config as { var_key?: string }).var_key)
+      .filter((k): k is string => !!k),
+  );
+  for (const n of nodes) {
+    const unknown = new Set(textFieldsOf(n).flatMap(referencedVars).filter((k) => !capturedKeys.has(k)));
+    for (const name of unknown) {
+      issues.push({
+        severity: "warning",
+        scope: "node",
+        node_key: n.node_key,
+        message: t
+          ? t("varUnknown", { name })
+          : `Variable "{{vars.${name}}}" is not captured by any collect-input node and will be sent empty.`,
+      });
+    }
+  }
+
+  // Loops that never stop to wait for the customer would make the
+  // engine send message after message in one go (F1). Every cycle must
+  // pass through a node that suspends the run.
+  const loop = findCycleWithoutWaiting(nodes);
+  if (loop) {
+    const path = loop.join(" → ");
+    issues.push({
+      severity: "error",
+      scope: "node",
+      node_key: loop[0],
+      message: t
+        ? t("cycleWithoutWait", { path })
+        : `Loop that never waits for the customer: ${path}. Add a node that waits for a reply (buttons, list or collect input).`,
+    });
+  }
+
   return issues;
+}
+
+/** Customer-facing texts of a node that may contain {{vars.x}}. */
+function textFieldsOf(n: NodeInput): string[] {
+  const c = n.config as Record<string, unknown>;
+  const pick = (...keys: string[]) => keys.map((k) => c[k]).filter((v): v is string => typeof v === "string");
+  switch (n.node_type) {
+    case "send_message":
+      return pick("text");
+    case "collect_input":
+      return pick("prompt_text");
+    case "send_buttons":
+    case "send_list":
+      return pick("text", "header_text", "footer_text");
+    case "send_media":
+      return pick("caption");
+    case "handoff":
+      return pick("note");
+    default:
+      return [];
+  }
+}
+
+/** Nodes that suspend the run until the customer replies. */
+const WAITING_NODE_TYPES = new Set(["send_buttons", "send_list", "collect_input"]);
+
+/**
+ * A cycle made only of non-waiting nodes, as a closed path
+ * (["a", "b", "a"]), or null. Edges into waiting nodes are dropped, so
+ * any cycle that passes through one is allowed.
+ */
+export function findCycleWithoutWaiting(nodes: NodeInput[]): string[] | null {
+  const byKey = new Map<string, NodeInput>();
+  for (const n of nodes) if (!WAITING_NODE_TYPES.has(n.node_type)) byKey.set(n.node_key, n);
+  const state = new Map<string, "visiting" | "done">();
+  const stack: string[] = [];
+  const visit = (key: string): string[] | null => {
+    state.set(key, "visiting");
+    stack.push(key);
+    for (const next of outgoingEdges(byKey.get(key)!)) {
+      if (!byKey.has(next)) continue;
+      const st = state.get(next);
+      if (st === "visiting") return [...stack.slice(stack.indexOf(next)), next];
+      if (!st) {
+        const found = visit(next);
+        if (found) return found;
+      }
+    }
+    stack.pop();
+    state.set(key, "done");
+    return null;
+  };
+  for (const key of byKey.keys()) {
+    if (!state.has(key)) {
+      const found = visit(key);
+      if (found) return found;
+    }
+  }
+  return null;
 }
 
 // ============================================================
@@ -686,6 +784,27 @@ function validateNode(
             ? t("collectInputPointsToMissing", { key: cfg.next_node_key })
             : `Collect-input points to non-existent node "${cfg.next_node_key}".`,
         });
+      }
+      // D9: a regex validation needs a pattern that compiles.
+      const vcfg = node.config as { validation?: string; regex?: string };
+      if (vcfg.validation === "regex") {
+        const problem = regexProblem(vcfg.regex);
+        if (problem) {
+          issues.push({
+            severity: "error",
+            scope: "node",
+            node_key: node.node_key,
+            field: "regex",
+            message:
+              problem === "missing"
+                ? t
+                  ? t("collectInputRegexMissing")
+                  : "Regex validation needs a regular expression."
+                : t
+                  ? t("collectInputRegexInvalid")
+                  : "The regular expression is invalid.",
+          });
+        }
       }
       break;
     }

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { drainAutomationTriggerEvents } from '@/lib/automations/engine'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
 
@@ -95,6 +96,9 @@ export async function POST(request: Request, { params }: Params) {
         { status: 500 },
       )
     }
+
+    // D3: "assign to me" fires conversation_assigned automations.
+    if (update.assigned_agent_id) await drainAutomationTriggerEvents(accountId)
 
     return NextResponse.json({ success: true, paused })
   } catch (err) {

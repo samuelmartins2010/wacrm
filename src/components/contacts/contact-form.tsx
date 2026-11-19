@@ -25,6 +25,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { pingAutomationEvents } from '@/lib/automations/ping';
 
 interface ContactFormProps {
   open: boolean;
@@ -178,21 +179,31 @@ export function ContactForm({
       }
 
       // Sync tags
+      // Only the difference is written: re-inserting tags the contact
+      // already had would fire tag_added automations again (D3).
       if (contactId) {
-        await supabase
-          .from('contact_tags')
-          .delete()
-          .eq('contact_id', contactId);
+        const before = new Set(isEdit ? contactTags.map((ct) => ct.tag_id) : []);
+        const after = new Set(selectedTagIds);
+        const removed = [...before].filter((id) => !after.has(id));
+        const added = [...after].filter((id) => !before.has(id));
 
-        if (selectedTagIds.length > 0) {
-          const tagRows = selectedTagIds.map((tag_id) => ({
-            contact_id: contactId!,
-            tag_id,
-          }));
+        if (removed.length > 0) {
+          const { error: rmError } = await supabase
+            .from('contact_tags')
+            .delete()
+            .eq('contact_id', contactId)
+            .in('tag_id', removed);
+          if (rmError) throw rmError;
+        }
+        if (added.length > 0) {
           const { error: tagError } = await supabase
             .from('contact_tags')
-            .insert(tagRows);
+            .upsert(
+              added.map((tag_id) => ({ contact_id: contactId!, tag_id })),
+              { onConflict: 'contact_id,tag_id', ignoreDuplicates: true },
+            );
           if (tagError) throw tagError;
+          pingAutomationEvents();
         }
       }
 

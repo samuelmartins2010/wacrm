@@ -57,6 +57,8 @@ export interface Account {
   name: string;
   /** auth.users.id of the immutable owner. */
   owner_user_id: string;
+  /** IANA zone for automation time conditions (migration 053); default America/Sao_Paulo. */
+  timezone?: string;
   created_at: string;
   updated_at: string;
 }
@@ -187,6 +189,8 @@ export interface Conversation {
    *    handed off, shown to whoever takes the thread over.
    */
   ai_autoreply_disabled?: boolean;
+  /** D7: set when a flow handed the thread to a human; cleared on close/reopen (migration 049). */
+  bot_handoff_at?: string | null;
   ai_reply_count?: number;
   ai_handoff_summary?: string | null;
 }
@@ -464,11 +468,12 @@ export type AutomationStepType =
   | 'send_webhook'
   | 'close_conversation';
 
-export type AutomationLogStatus = 'success' | 'partial' | 'failed';
+export type AutomationLogStatus = 'success' | 'partial' | 'failed' | 'cancelled' | 'waiting';
 
 export interface KeywordMatchTriggerConfig {
   keywords: string[];
   match_type: 'exact' | 'contains';
+  /** @deprecated D5: ignored — matching never depends on case or accents. */
   case_sensitive?: boolean;
 }
 
@@ -600,6 +605,8 @@ export interface Automation {
   last_executed_at?: string | null;
   created_at: string;
   updated_at: string;
+  /** D4: keep running after a wait even if the contact replies (default false). */
+  continue_on_reply?: boolean;
 }
 
 export interface AutomationStep {

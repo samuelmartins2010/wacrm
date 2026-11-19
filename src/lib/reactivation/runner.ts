@@ -65,6 +65,8 @@ export interface RunnerStore {
   ): Promise<ReactivationSend | null>
   updateSend(id: string, patch: Partial<ReactivationSend>): Promise<void>
   latestConversationId(contactId: string): Promise<string | null>
+  /** D11: is the contact inside an active flow run right now? */
+  hasActiveFlowRun(contactId: string): Promise<boolean>
   getTemplate(id: string): Promise<MessageTemplate | null>
   /** Dry run: persist a bot message without calling Meta. Returns messages.id. */
   insertDryRunMessage(conversationId: string, templateName: string, wamid: string): Promise<string | null>
@@ -207,6 +209,15 @@ async function runLocked(deps: RunnerDeps, now: Date): Promise<RunResult> {
         await end('cancelled', { end_reason: 'returned_before_send' })
       }
       result.skipped++
+      continue
+    }
+
+    // D11: never interrupt a flow conversation — while the contact has an
+    // active flow run, the touch waits for the next round (the window
+    // check then holds it until the window opens again).
+    if (await store.hasActiveFlowRun(contact.id)) {
+      await store.updateEnrollment(e.id, { next_run_at: nowIso, updated_at: nowIso }, true)
+      result.deferred++
       continue
     }
 

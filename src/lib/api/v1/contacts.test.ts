@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import {
@@ -61,5 +61,39 @@ describe('findOrCreateContact', () => {
     await expect(
       findOrCreateContact(noopDb, 'acc', 'user', { phone: 'not-a-number' })
     ).rejects.toBeInstanceOf(ContactError);
+  });
+});
+
+vi.mock("@/lib/contacts/resolve-import-tags", async (orig) => ({
+  ...(await orig<object>()),
+  resolveImportTagIds: async (_db: unknown, o: { tagNames: string[] }) => ({
+    tagIdByKey: new Map(o.tagNames.map((n) => [n.toLowerCase(), `id-${n}`])),
+  }),
+}));
+vi.mock("@/lib/automations/engine", () => ({ drainAutomationTriggerEvents: async () => 0 }));
+
+describe("setContactTags — API changes are individual (D12)", () => {
+  function fakeDb(current: string[]) {
+    const calls: string[] = [];
+    const db = {
+      rpc: async (name: string) => (calls.push(`rpc:${name}`), { data: 1, error: null }),
+      from: (table: string) => {
+        const b: Record<string, unknown> = {};
+        for (const m of ["select", "eq", "in", "delete", "ilike", "limit"]) b[m] = () => b;
+        b.insert = () => (calls.push(`insert:${table}`), b);
+        b.then = (res: (v: unknown) => unknown) =>
+          Promise.resolve(table === "contact_tags" ? { data: current.map((tag_id) => ({ tag_id })), error: null } : { data: [], error: null }).then(res);
+        return b;
+      },
+    };
+    return { db, calls };
+  }
+
+  it("adding tags through the API writes contact_tags directly (fires tag_added)", async () => {
+    const { setContactTags } = await import("./contacts");
+    const { db, calls } = fakeDb([]);
+    await setContactTags(db as never, "acc", "u", "c1", ["T"]);
+    expect(calls).toContain("insert:contact_tags");
+    expect(calls).not.toContain("rpc:contact_tags_insert_bulk");
   });
 });

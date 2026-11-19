@@ -18,6 +18,98 @@ Modelo de entrada:
 
 ---
 
+## Para religar a VPS
+
+Checklist para tirar a produção da pausa (VPS + Supabase cloud). Siga na ordem; cada item diz onde conferir.
+
+1. **Migrations 040–056 antes de subir o código.**
+   - Rodar no SQL Editor do Supabase cloud (projeto `crm`), **uma por vez e na ordem** do `docs/deploy-migrations-040-055.md` (o guia cobre 040–056), com o cron pausado.
+   - **Onde conferir:** depois de cada migration, rodar a consulta de verificação da tabela do guia; ela tem que voltar `true`. Se alguma falhar, seguir o "plano se falhar" do guia e **não** subir o código novo.
+   - Só depois de a 056 passar, subir o código do `main` na VPS.
+
+2. **Pinger chamando os 3 crons a cada 5 min**, todos com o header `x-cron-secret: <AUTOMATION_CRON_SECRET>`:
+   - `/api/automations/cron`. Se faltar, as automações paradas num passo **Aguardar** nunca continuam, e eventos de `tag_added`/`conversation_assigned` que não foram tratados na hora (rede de segurança do D3) nunca disparam.
+   - `/api/flows/cron`. Se faltar, quem abandona um fluxo no meio fica com uma execução `active` para sempre. Ela só se encerra quando o contato manda outra mensagem (F8), e até lá bloqueia novos gatilhos de fluxo para esse contato e faz a Reativação adiar os toques dele (D11).
+   - `/api/reactivation/cron`. Se faltar, **nenhum toque da Reativação é enviado**: as campanhas ficam paradas com inscrições pendentes e as sem inscrições abertas não são encerradas.
+   - **Onde conferir:** `curl -i -H "x-cron-secret: …" https://clientizza.com/api/<rota>/cron` responde 200 para as três (sem o header, 401); no painel do pinger, as três chamadas aparecem a cada 5 min com status 200.
+
+3. **Webhook da Meta apontando para a VPS.**
+   - Em Meta for Developers → app do WhatsApp → **WhatsApp → Configuração** → Webhook: URL de retorno `https://clientizza.com/api/whatsapp/webhook` e o **Token de verificação** igual ao salvo no Clientizza (Configurações → WhatsApp → "Token de verificação do webhook"). Assinar o campo `messages`.
+   - `META_APP_SECRET` precisa estar no env da VPS (Meta → Configurações do app → Básico → Chave secreta do app); sem ele o webhook recusa toda mensagem.
+   - `REACTIVATION_DRY_RUN` **não** pode estar ligado em produção (nem `WHATSAPP_TEMPLATES_DRY_RUN`): conferir no env da VPS que não existem ou não valem `true`. Com eles ligados, nada sai para a Meta e o sistema finge que enviou.
+   - **Onde conferir:** o botão "Verificar e salvar" da Meta aceita a URL; mandar "oi" de um número próprio e a mensagem aparece no inbox.
+
+4. **Teste da Reativação com WhatsApp real.** Uma campanha com 2–3 números próprios, com o template `volta_cliente` aprovado:
+   - **Envio:** o toque chega no WhatsApp e aparece no inbox como mensagem automática.
+   - **Resposta:** um número responde "oi" e a inscrição vira respondida, sem novo toque.
+   - **SAIR:** um número manda "SAIR" e recebe **só** a confirmação (sem automação nem I.A); o contato fica com "não contatar".
+   - **Número sem WhatsApp:** incluir um número que não tem WhatsApp; o envio falha com o código da Meta (131026) gravado e a inscrição fica `failed`, sem retentativa.
+   - **Onde conferir:** tela Reativação → relatório da campanha (enviados, respostas, saídas, falhas) e a ficha de cada contato (selo de não contatar).
+
+---
+
+## 2026-11-19: API individual dispara (D12), funis em português, ficha do contato e selo Beta
+- **Origem:** pedido do Samuel na revisão do PR #2.
+- **Decisão D12:** criar UM contato pela API v1 (`POST /api/v1/contacts`) com etiquetas **dispara** `tag_added`, como mudança individual. Silenciosos (D10) continuam só a importação CSV, a ação **Etiquetar** em lote e a atribuição em lote.
+- **O que mudou:**
+  - `0feb895` (D12): o `POST` grava as etiquetas como mudança individual; saiu a opção `bulk` de `setContactTags`, que ficou sem uso.
+  - `fefd670` (funis): o funil padrão ("Funil de vendas": Novo lead, Qualificado, Proposta enviada, Negociação, Ganho) e as etapas de todo funil criado em "Adicionar funil" vêm do next-intl, no idioma da tela (antes eram fixos em inglês no código). "Gerenciar funis" aparece só para admin; o salvar confere a linha gravada (para um agente o RLS devolvia "0 linhas, sem erro" e a tela dizia "Funil salvo"). O botão "Excluir funil" tinha texto vermelho sobre fundo vermelho. A data do cartão do negócio segue o idioma, e as instruções de arrastar (leitores de tela) foram traduzidas.
+  - `d86a7bb` + `85894ae` (ficha do contato): chave `Contacts.detailView.tabs.tags` (Etiquetas/Tags) e rótulo **Nome** (o campo do nome aparecia como "Empresa": `t('company', { fallback })` não faz fallback no next-intl). As abas quebram linha sem cobrir os campos; nome, e-mail e empresa com reticências e o texto completo ao passar o mouse; toast de erro de modelo traduzido. Novo `npm run i18n:check` (`scripts/check-i18n-keys.mjs`) lista chaves usadas no código e ausentes em pt-BR/en.
+  - `e1715d9`: saiu o selo "Beta" de Fluxos (menu lateral e página), com a prop `beta` e as chaves `Sidebar.beta`/`Flows.list.beta`.
+- **Banco local:** funil e etapas com o nome padrão exato em inglês convertidos para português (nomes personalizados não foram tocados). Produção não tem funis.
+- **Esta branch também criou** a ação **Etiquetar** em lote na barra de seleção de Contatos (não existia; ver D10).
+- **Como foi testado:** D12 ponta a ponta: 50 importados (CSV) + 50 em lote → 0 execuções; `POST` de 1 contato com a etiqueta → 1 execução. Capturas antes/depois a 1280 e 1440 px de /pipelines, "Gerenciar funis", ficha do contato e /flows.
+- **Pendências:** `npm run i18n:check` aponta 1 chave fora destas telas (`Automations.builder.delete`); chamadas com chave dinâmica e `t` recebido por prop não são verificadas pelo script.
+
+## 2026-11-18: Operações em massa sem gatilho (D10), toque adiado em fluxo (D11) e replay das migrations
+- **Origem:** pedido do Samuel após as correções de Automações e Fluxos.
+- **Decisões:**
+  - **D10:** operações em massa NÃO geram `tag_added`/`conversation_assigned`: importação de contatos (CSV ou API), etiqueta aplicada a vários contatos de uma vez e atribuição em lote. Só mudanças individuais disparam.
+  - **D11:** o runner da Reativação adia o toque (para a próxima rodada) enquanto o contato tiver `flow_run` ativo, na rechecagem que já existia antes do envio.
+- **O que mudou:**
+  - `477988a` (D10): migration 056 — os triggers da 055 respeitam `app.automation_events='off'`, ligado só dentro da transação pelas funções `contact_tags_insert_bulk` (importação), `contacts_bulk_add_tag` (lote) e `conversations_bulk_assign` (lote; ainda sem tela). Importação CSV e (até o D12) `POST /api/v1/contacts` gravam etiquetas pela função de massa; `PATCH /api/v1/contacts/[id]`, a ficha, o formulário, fluxos e automações continuam disparando. Nova ação **Etiquetar** na barra de seleção de Contatos (antes só havia excluir).
+  - `9df736c` (D11): `hasActiveFlowRun` no store do runner; com fluxo ativo a inscrição volta a vencer na próxima rodada.
+  - `0de6c71`: `docs/deploy-migrations-040-055.md` — ordem, verificação por migration (040–056) e plano se falhar.
+- **Banco (migrations):** 056_automation_events_bulk_silent.
+- **Replay feito (18/11/2026):** `pg_dump` completo em `~/Developer/wacrm-secrets/local-backup-2026-11-18.sql` (+ dump só de dados `local-data-2026-11-18.sql`, ambos 600); `npx supabase db reset` aplicou 001→056 em ordem sem erro; `supabase test db` passou no banco novo (58 asserts); dados restaurados (admin local, 4 contatos aaaaaaaa, template volta_cliente) e login confirmado por sessão real do Supabase Auth.
+- **Como foi testado:** vitest 933/933, pgTAP 58, tsc e build ok. Ponta a ponta (proxy da Meta, crons via curl): 40 importados pelo código do import-modal + 10 pela API v1 + 50 em lote com a etiqueta T e automação `tag_added(T)` ativa → 0 eventos, 0 execuções; T em 1 contato pela ficha → 1 execução; loop A7 L1→L2→L3 continua cortado na profundidade 2. D11: contato no menu do fluxo + toque devido → adiado, nada enviado; fluxo encerrado (tempo esgotado) → toque saiu na rodada seguinte (dry-run).
+- **Pendências / riscos:**
+  - Comportamento esperado (não é pendência): se o contato termina o fluxo **respondendo**, a resposta conta como "voltou antes do envio" e o toque é cancelado.
+  - Atribuição em lote não tem tela; a função `conversations_bulk_assign` já respeita o D10.
+  - API v1 não tem rota de etiqueta em lote. (O `POST` passou a disparar pelo D12, entrada acima.)
+
+## 2026-11-18: Correções de Automações e Fluxos
+- **Origem:** auditorias de Automações e de Fluxos (17/11) + decisões de produto do Samuel (D3–D9).
+- **Decisões de produto:**
+  - **D3:** `conversation_assigned` e `tag_added` passam a disparar (atribuição e etiqueta feitas pela tela, pela API e por passos de automação/fluxo). `time_based` sai da tela de criação (o tipo continua no banco); automações antigas com ele mostram aviso.
+  - **D4:** contato que responde durante um wait cancela o restante da automação, por padrão. Opção por automação "Continuar mesmo se o contato responder" (padrão desligada).
+  - **D5:** palavra-chave ignora maiúsculas e acentos; "contém" casa palavra inteira; "exata" ignora pontuação e espaços nas pontas. Vale para automações e fluxos.
+  - **D6:** várias automações com o mesmo gatilho rodam todas, em ordem garantida (`created_at`); a lista avisa quando há duplicidade.
+  - **D7:** depois de um handoff (nó handoff, fallback esgotado ou nó removido), I.A e automações de conteúdo (`new_message_received`, `keyword_match`, `interactive_reply`) ficam em silêncio naquela conversa até ela ser encerrada/reaberta.
+  - **D8:** salvar fluxo ativo revalida; se inválido, 422 e nada é gravado. A troca de nós é atômica. Execução cujo nó atual sumiu → handoff com evento `node_removed`.
+  - **D9:** `collect_input` aplica a validação (e-mail, telefone, regex); resposta inválida reenvia a pergunta (2 tentativas, depois atendente).
+- **O que mudou (um commit por item, branch `fix/automacoes-fluxos`):**
+  - F1 `3334b10` ciclo sem espera bloqueado na validação + no máximo 10 mensagens por avanço (antes: 63).
+  - F2 `67c4393` D8. F3 `b67a525` D9 (campo "Validar resposta" no nó). F4 `ba8dc95` `{{vars.x}}`/`{{ vars.x }}` em botões, listas e nota do handoff; aviso de variável inexistente.
+  - F5 `0784f01` D7. F6 `437ae97` falha avisada pelo webhook de status (ex.: 131053) vira evento `error/delivery_failed` na execução.
+  - F7 `1548ffa` limite de upload por tipo (imagem 5 MB, vídeo/áudio 16 MB, documento 100 MB), erro na tela antes do envio.
+  - F8 `5375274` execução ativa vencida é encerrada (`timed_out`/`stale_on_inbound`) pelo novo inbound, sem depender do cron.
+  - F9 `08bd371` frase do 422 de ativação em pt-BR/en, título "Fluxos" no header, datas e duração no idioma da tela.
+  - A1 `2431e0c` D4 + uma execução por automação/contato. A2 `0c6f328` automação desativada/apagada não retoma.
+  - A3 `0194ce0` `time_of_day` no fuso da conta (`accounts.timezone`, padrão America/Sao_Paulo).
+  - A4 `82cb9e2` wait dentro de condição pausa tudo; log "Aguardando". A5 `6c67688` erro em ramo interrompe e grava failed.
+  - A6 `6021c76` passos conferem a gravação (etiqueta/funil/etapa/agente/campo) e a tela recusa referência inexistente ao salvar.
+  - A8 `3e99f8c` D5. A9 `19cae2a` D6. A7 `dd4a0fd` D3 com proteção contra loop (profundidade 1).
+- **Banco (migrations):** 048 `replace_flow_nodes` + evento `node_removed`; 049 `conversations.bot_handoff_at` + trigger; 050 índice do wamid nos eventos; 051 buckets de mídia 100 MB; 052 `continue_on_reply`, status `cancelled`, uma espera aberta por automação/contato; 053 `accounts.timezone`; 054 status `waiting` no log; 055 `automation_trigger_events` + triggers em `contact_tags`/`conversations` + RPCs `automation_add_tag`, `automation_assign_conversation`, `claim_automation_trigger_events`.
+- **Arquivos principais:** `src/lib/flows/{engine,validate,save,collect-validation,vars,delivery,run-dates}.ts`, `src/lib/automations/{engine,references,duplicates,ping}.ts`, `src/lib/keywords.ts`, `src/app/api/whatsapp/webhook/route.ts`, `src/app/api/flows/[id]/route.ts`, `src/app/api/automations/events/route.ts`, `src/app/api/automations/cron/route.ts`.
+- **Como foi testado:** vitest 927/927 (TZ=UTC), pgTAP 51 asserts (7 arquivos), tsc e build ok. Ponta a ponta com webhook assinado, proxy local imitando a Meta (nada saiu da máquina; só 2 consultas do Next ao npm, bloqueadas), crons via curl e dev em TZ=UTC; resultado por item no relatório da tarefa. Limpeza conferida: base 4 contatos / 4 conversas / 7 mensagens.
+- **Pendências / riscos:**
+  - Convivência Reativação × fluxo (C1): resposta a um toque de quem está no meio de um fluxo caía no fluxo, que reenviava o menu → evitado pelo D11 (o toque não sai enquanto há fluxo ativo).
+  - Não há tela para mudar o fuso da conta (`accounts.timezone` só no banco/API).
+  - ~~Importação de contatos com etiqueta dispara `tag_added`~~ → resolvido pelo D10 (entrada acima).
+  - As mensagens de erro da validação de automações (`validate.ts`, `references.ts`) seguem em inglês, como já eram.
+  - ~~Sem `supabase db reset` completo~~ → replay feito (entrada acima).
+
 ## 2026-11-17: Reativação: SAIR sem resposta dupla, trava da inscrição e .env do Mac
 - **Origem:** relatório de verificação (SAIR recebia confirmação + resposta da automação/I.A; trava da inscrição contava do início da rodada) e pedido do Samuel de separar as chaves de produção do Mac.
 - **O que mudou:**

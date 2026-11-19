@@ -130,6 +130,7 @@ export async function POST(request: Request) {
         ctx.accountId,
         auditUserId,
         id,
+        // D12: creating ONE contact is an individual change — tag_added fires.
         body.tags.filter((t): t is string => typeof t === 'string')
       );
     }

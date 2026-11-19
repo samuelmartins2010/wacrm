@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { loadAccountRefs, validateStepReferences } from '@/lib/automations/references'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
@@ -70,7 +71,7 @@ export async function PATCH(
   // to compute the post-patch "effective" state for validation.
   const { data: existing } = await admin
     .from('automations')
-    .select('id, user_id, is_active, trigger_type, trigger_config')
+    .select('id, user_id, account_id, is_active, trigger_type, trigger_config')
     .eq('id', id)
     .maybeSingle()
   if (!existing || existing.user_id !== user.id) {
@@ -84,8 +85,24 @@ export async function PATCH(
     'trigger_type',
     'trigger_config',
     'is_active',
+    'continue_on_reply',
   ] as const) {
     if (k in body) update[k] = body[k]
+  }
+
+  // A6: references to account data (tag, agent, pipeline/stage, custom
+  // field) must exist — checked on every save that sends steps.
+  if (Array.isArray(body.steps)) {
+    const refIssues = validateStepReferences(
+      body.steps as Parameters<typeof validateStepReferences>[0],
+      await loadAccountRefs(admin, existing.account_id as string),
+    )
+    if (refIssues.length > 0) {
+      return NextResponse.json(
+        { error: 'Automation references data that does not exist in this account', issues: refIssues },
+        { status: 400 },
+      )
+    }
   }
 
   // If this PATCH leaves the automation active (either explicitly

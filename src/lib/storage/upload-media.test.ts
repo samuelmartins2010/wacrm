@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMediaPath, MEDIA_MAX_BYTES_BY_KIND } from "./upload-media";
+import { buildMediaPath, MEDIA_MAX_BYTES_BY_KIND , mediaSizeProblem } from "./upload-media";
 
 const ACCOUNT = "11111111-2222-3333-4444-555555555555";
 
@@ -38,9 +38,26 @@ describe("MEDIA_MAX_BYTES_BY_KIND", () => {
     expect(MEDIA_MAX_BYTES_BY_KIND.image).toBe(5 * 1024 * 1024);
   });
 
-  it("caps video/audio/document at the 16 MB bucket limit", () => {
+  it("caps video/audio at 16 MB and documents at Meta's 100 MB (F7)", () => {
     expect(MEDIA_MAX_BYTES_BY_KIND.video).toBe(16 * 1024 * 1024);
     expect(MEDIA_MAX_BYTES_BY_KIND.audio).toBe(16 * 1024 * 1024);
-    expect(MEDIA_MAX_BYTES_BY_KIND.document).toBe(16 * 1024 * 1024);
+    expect(MEDIA_MAX_BYTES_BY_KIND.document).toBe(100 * 1024 * 1024);
+  });
+});
+
+describe("mediaSizeProblem (F7, Meta limits per kind)", () => {
+  const MB = 1024 * 1024;
+  it("image is capped at 5 MB", () => {
+    expect(mediaSizeProblem("image", 5 * MB)).toBeNull();
+    expect(mediaSizeProblem("image", 6 * MB)).toEqual({ limitMb: 5 });
+  });
+  it("video and audio at 16 MB", () => {
+    expect(mediaSizeProblem("video", 16 * MB)).toBeNull();
+    expect(mediaSizeProblem("video", 17 * MB)).toEqual({ limitMb: 16 });
+    expect(mediaSizeProblem("audio", 17 * MB)).toEqual({ limitMb: 16 });
+  });
+  it("document at 100 MB", () => {
+    expect(mediaSizeProblem("document", 50 * MB)).toBeNull();
+    expect(mediaSizeProblem("document", 101 * MB)).toEqual({ limitMb: 100 });
   });
 });

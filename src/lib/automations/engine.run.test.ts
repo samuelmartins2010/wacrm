@@ -1,0 +1,315 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { memDb, type MemDb } from "./test-db";
+
+const h = vi.hoisted(() => ({ db: null as unknown, sent: [] as string[] }));
+vi.mock("./admin-client", () => ({ supabaseAdmin: () => h.db }));
+vi.mock("./meta-send", () => ({
+  engineSendText: async (a: { text: string }) => (h.sent.push(a.text), { whatsapp_message_id: `wamid.${h.sent.length}` }),
+  engineSendTemplate: async () => ({ whatsapp_message_id: "wamid.t" }),
+  engineSendInteractive: async () => ({ whatsapp_message_id: "wamid.i" }),
+}));
+
+import { cancelWaitsOnContactReply, resumePendingExecution, runAutomationsForTrigger } from "./engine";
+
+const ACC = "acc";
+const CONTACT = "c1";
+let db: MemDb;
+
+function automation(over: Record<string, unknown> = {}) {
+  return {
+    id: "auto1", account_id: ACC, user_id: "u1", name: "A", is_active: true,
+    trigger_type: "keyword_match", trigger_config: { keywords: ["oi"], match_type: "contains" },
+    continue_on_reply: false, execution_count: 0, created_at: "2026-01-01T00:00:00Z", ...over,
+  };
+}
+const step = (id: string, position: number, step_type: string, step_config: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+  ({ id, automation_id: "auto1", position, step_type, step_config, parent_step_id: null, branch: null, ...extra });
+
+function seed(autos: Record<string, unknown>[], steps: Record<string, unknown>[]) {
+  db = memDb(
+    {
+      contacts: [{ id: CONTACT, account_id: ACC, name: "Ana" }],
+      automations: autos,
+      automation_steps: steps,
+      automation_logs: [],
+      automation_pending_executions: [],
+    },
+    {
+      rpc: {
+        // migration 055 functions (without the event side effect)
+        automation_add_tag: (a, d) => {
+          const tags = (d.tables.contact_tags ??= []);
+          if (tags.some((t) => t.contact_id === a.p_contact_id && t.tag_id === a.p_tag_id)) return false;
+          tags.push({ contact_id: a.p_contact_id, tag_id: a.p_tag_id });
+          return true;
+        },
+        automation_assign_conversation: (a, d) => {
+          const rows = (d.tables.conversations ?? []).filter((c) => c.account_id === a.p_account_id && c.contact_id === a.p_contact_id);
+          rows.forEach((c) => (c.assigned_agent_id = a.p_agent_id));
+          return rows.length;
+        },
+      },
+      unique: {
+        automation_pending_executions: [
+          { cols: ["automation_id", "contact_id"], where: (r) => r.status === "pending" || r.status === "running" },
+        ],
+      },
+    },
+  );
+  h.db = db;
+}
+
+const fire = (text = "oi") =>
+  runAutomationsForTrigger({ accountId: ACC, triggerType: "keyword_match", contactId: CONTACT, context: { message_text: text, conversation_id: "conv1" } });
+
+const pendings = () => db.tables.automation_pending_executions;
+const logs = () => db.tables.automation_logs;
+
+async function resumeDue() {
+  for (const p of pendings().filter((r) => r.status === "pending")) {
+    p.status = "running";
+    await resumePendingExecution(p as never);
+  }
+}
+
+beforeEach(() => {
+  h.sent.length = 0;
+});
+
+const waitFlow = [
+  step("s1", 0, "send_message", { text: "um" }),
+  step("s2", 1, "wait", { amount: 1, unit: "hours" }),
+  step("s3", 2, "send_message", { text: "dois" }),
+];
+
+describe("A1/D4: a reply during a wait cancels the rest by default", () => {
+  it("cancels the pending step and marks the log cancelled", async () => {
+    seed([automation()], waitFlow);
+    await fire();
+    expect(pendings()).toHaveLength(1);
+    await cancelWaitsOnContactReply(ACC, CONTACT);
+    expect(pendings()[0].status).toBe("cancelled");
+    expect(logs()[0].status).toBe("cancelled");
+    await resumeDue();
+    expect(h.sent).toEqual(["um"]);
+  });
+
+  it("'continue even if the contact replies' keeps the wait", async () => {
+    seed([automation({ continue_on_reply: true })], waitFlow);
+    await fire();
+    await cancelWaitsOnContactReply(ACC, CONTACT);
+    expect(pendings()[0].status).toBe("pending");
+    await resumeDue();
+    expect(h.sent).toEqual(["um", "dois"]);
+  });
+
+  it("only touches this contact's waits in this account", async () => {
+    seed([automation()], waitFlow);
+    await fire();
+    await cancelWaitsOnContactReply("other-acc", CONTACT);
+    await cancelWaitsOnContactReply(ACC, "other-contact");
+    expect(pendings()[0].status).toBe("pending");
+  });
+});
+
+describe("A1: one execution per automation and contact", () => {
+  it("the keyword repeated during a wait does not open a parallel execution", async () => {
+    seed([automation({ continue_on_reply: true })], waitFlow);
+    await fire();
+    await fire();
+    expect(h.sent).toEqual(["um"]);
+    expect(logs()).toHaveLength(1);
+    expect(pendings().filter((p) => p.status === "pending")).toHaveLength(1);
+  });
+});
+
+describe("A2: a deactivated or deleted automation does not resume", () => {
+  it("deactivated during the wait → pending cancelled, log says why", async () => {
+    seed([automation()], waitFlow);
+    await fire();
+    db.tables.automations[0].is_active = false;
+    await resumeDue();
+    expect(h.sent).toEqual(["um"]);
+    expect(pendings()[0].status).toBe("cancelled");
+    expect(logs()[0].status).toBe("cancelled");
+    expect(JSON.stringify(logs()[0].steps_executed)).toMatch(/automation is no longer active/);
+  });
+
+  it("deleted during the wait → pending cancelled", async () => {
+    seed([automation()], waitFlow);
+    await fire();
+    db.tables.automations = [];
+    await resumeDue();
+    expect(h.sent).toEqual(["um"]);
+    expect(pendings()[0].status).toBe("cancelled");
+  });
+});
+
+describe("A3: time_of_day uses the account time zone, never the server's", () => {
+  const branchy = [
+    step("c", 0, "condition", { subject: "time_of_day", operand: "08:00-10:00" }),
+    step("y", 0, "send_message", { text: "dentro" }, { parent_step_id: "c", branch: "yes" }),
+    step("n", 0, "send_message", { text: "fora" }, { parent_step_id: "c", branch: "no" }),
+  ];
+  afterEach(() => vi.useRealTimers());
+
+  it("12:00 UTC is 09:00 in São Paulo (default) → inside 08:00-10:00", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-18T12:00:00Z"));
+    seed([automation()], branchy);
+    db.tables.accounts = [{ id: ACC, timezone: null }];
+    await fire();
+    expect(h.sent).toEqual(["dentro"]);
+  });
+
+  it("an account in Lisbon (12:00) is outside", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-18T12:00:00Z"));
+    seed([automation()], branchy);
+    db.tables.accounts = [{ id: ACC, timezone: "Europe/Lisbon" }];
+    await fire();
+    expect(h.sent).toEqual(["fora"]);
+  });
+});
+
+describe("minutesOfDayIn", () => {
+  it("converts and falls back to São Paulo on an invalid zone", async () => {
+    const { minutesOfDayIn } = await import("./engine");
+    const at = new Date("2026-11-18T12:30:00Z");
+    expect(minutesOfDayIn(at, "America/Sao_Paulo")).toBe(9 * 60 + 30);
+    expect(minutesOfDayIn(at, "Asia/Tokyo")).toBe(21 * 60 + 30);
+    expect(minutesOfDayIn(at, "Not/AZone")).toBe(9 * 60 + 30);
+  });
+});
+
+describe("A4: wait inside a condition branch", () => {
+  const nested = [
+    step("c", 0, "condition", { subject: "message_content", value: "oi" }),
+    step("a", 0, "send_message", { text: "a" }, { parent_step_id: "c", branch: "yes" }),
+    step("w", 1, "wait", { amount: 1, unit: "hours" }, { parent_step_id: "c", branch: "yes" }),
+    step("b", 2, "send_message", { text: "b" }, { parent_step_id: "c", branch: "yes" }),
+    step("d", 1, "send_message", { text: "depois" }),
+  ];
+
+  it("the step after the condition only runs after the wait, and the log is not 'success' meanwhile", async () => {
+    seed([automation()], nested);
+    await fire();
+    expect(h.sent).toEqual(["a"]);
+    expect(logs()[0].status).toBe("waiting");
+    await resumeDue();
+    expect(h.sent).toEqual(["a", "b", "depois"]);
+    expect(logs()[0].status).toBe("success");
+    expect(pendings()[0].status).toBe("done");
+  });
+
+  it("log steps stay in execution order", async () => {
+    seed([automation()], nested);
+    await fire();
+    await resumeDue();
+    const order = (logs()[0].steps_executed as { step_id: string }[]).map((r) => r.step_id);
+    expect(order).toEqual(["c", "a", "w", "b", "d"]);
+  });
+
+  it("a top-level wait also shows as waiting, then success", async () => {
+    seed([automation()], waitFlow);
+    await fire();
+    expect(logs()[0].status).toBe("waiting");
+    await resumeDue();
+    expect(logs()[0].status).toBe("success");
+  });
+});
+
+describe("A5: an error inside a condition branch stops the run as failed", () => {
+  it("does not run the steps after the condition and records failed", async () => {
+    seed([automation()], [
+      step("c", 0, "condition", { subject: "message_content", value: "oi" }),
+      step("bad", 0, "send_message", { text: "   " }, { parent_step_id: "c", branch: "yes" }),
+      step("d", 1, "send_message", { text: "depois" }),
+    ]);
+    await fire();
+    expect(h.sent).toEqual([]);
+    expect(logs()[0].status).toBe("failed");
+    expect(logs()[0].error_message).toMatch(/empty text/);
+  });
+});
+
+describe("A6: write steps check what they wrote", () => {
+  const one = (type: string, cfg: Record<string, unknown>) => [step("x", 0, type, cfg), step("d", 1, "send_message", { text: "depois" })];
+  const run = async (type: string, cfg: Record<string, unknown>, extra: Record<string, Record<string, unknown>[]> = {}) => {
+    seed([automation()], one(type, cfg));
+    Object.assign(db.tables, {
+      tags: [{ id: "tag-ok", account_id: ACC }, { id: "tag-other", account_id: "other" }],
+      pipelines: [{ id: "p-ok", account_id: ACC }, { id: "p-other", account_id: "other" }],
+      pipeline_stages: [{ id: "s-ok", pipeline_id: "p-ok" }, { id: "s-other", pipeline_id: "p-other" }],
+      profiles: [{ user_id: "agent-ok", account_id: ACC }, { user_id: "agent-other", account_id: "other" }],
+      conversations: [{ id: "conv1", account_id: ACC, contact_id: CONTACT }],
+      contact_tags: [],
+      deals: [],
+      accounts: [{ id: ACC, default_currency: "BRL" }],
+      ...extra,
+    });
+    await fire();
+    return logs()[0];
+  };
+
+  it("add_tag with a tag that does not exist in the account → failed", async () => {
+    const log = await run("add_tag", { tag_id: "tag-other" });
+    expect(log.status).toBe("failed");
+    expect(log.error_message).toMatch(/tag not found/);
+    expect(db.tables.contact_tags).toHaveLength(0);
+    expect(h.sent).toEqual([]);
+  });
+  it("add_tag with a valid tag → tagged", async () => {
+    const log = await run("add_tag", { tag_id: "tag-ok" });
+    expect(log.status).toBe("success");
+    expect(db.tables.contact_tags).toHaveLength(1);
+  });
+  it("assign_conversation to someone outside the account → failed", async () => {
+    const log = await run("assign_conversation", { mode: "specific", agent_id: "agent-other" });
+    expect(log.status).toBe("failed");
+    expect(log.error_message).toMatch(/agent is not a member/);
+    expect(db.tables.conversations[0].assigned_agent_id).toBeUndefined();
+  });
+  it("assign_conversation without a conversation → failed", async () => {
+    const log = await run("assign_conversation", { mode: "specific", agent_id: "agent-ok" }, { conversations: [] });
+    expect(log.status).toBe("failed");
+    expect(log.error_message).toMatch(/no conversation/);
+  });
+  it("assign_conversation to a member → assigned", async () => {
+    const log = await run("assign_conversation", { mode: "specific", agent_id: "agent-ok" });
+    expect(log.status).toBe("success");
+    expect(db.tables.conversations[0].assigned_agent_id).toBe("agent-ok");
+  });
+  it("create_deal with a pipeline from another account → failed", async () => {
+    const log = await run("create_deal", { pipeline_id: "p-other", stage_id: "s-other", title: "x" });
+    expect(log.status).toBe("failed");
+    expect(log.error_message).toMatch(/pipeline not found/);
+    expect(db.tables.deals).toHaveLength(0);
+  });
+  it("create_deal with a stage of another pipeline → failed", async () => {
+    const log = await run("create_deal", { pipeline_id: "p-ok", stage_id: "s-other", title: "x" });
+    expect(log.error_message).toMatch(/stage does not belong/);
+  });
+  it("update_contact_field on a non-writable field → failed (not a silent success)", async () => {
+    const log = await run("update_contact_field", { field: "phone", value: "1" });
+    expect(log.status).toBe("failed");
+    expect(log.error_message).toMatch(/not writable/);
+  });
+});
+
+describe("A9/D6: several automations with the same trigger all run, in created_at order", () => {
+  it("runs both, oldest first, regardless of storage order", async () => {
+    seed(
+      [
+        automation({ id: "new", created_at: "2026-03-01T00:00:00Z" }),
+        automation({ id: "old", created_at: "2026-01-01T00:00:00Z" }),
+      ],
+      [
+        { ...step("n1", 0, "send_message", { text: "nova" }), automation_id: "new" },
+        { ...step("o1", 0, "send_message", { text: "antiga" }), automation_id: "old" },
+      ],
+    );
+    await fire();
+    expect(h.sent).toEqual(["antiga", "nova"]);
+  });
+});

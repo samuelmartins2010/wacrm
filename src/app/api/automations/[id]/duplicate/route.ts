@@ -45,6 +45,7 @@ export async function POST(
       description: original.description,
       trigger_type: original.trigger_type,
       trigger_config: original.trigger_config,
+      continue_on_reply: original.continue_on_reply ?? false,
       is_active: false,
     })
     .select()

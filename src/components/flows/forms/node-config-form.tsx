@@ -46,7 +46,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { uploadAccountMedia, MEDIA_MAX_BYTES } from "@/lib/storage/upload-media";
+import { uploadAccountMedia, mediaSizeProblem } from "@/lib/storage/upload-media";
 import { slugify, type BuilderNode } from "../shared";
 import { NextNodeRow, NodeKeySelect, TextRow } from "./fields";
 
@@ -162,6 +162,35 @@ export function NodeConfigForm({
               </code>
               .
             </p>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">
+              {t("validationLabel")}
+            </label>
+            <Select
+              value={(cfg as { validation?: string }).validation ?? "any"}
+              onValueChange={(v) => onUpdateConfig({ validation: v })}
+            >
+              <SelectTrigger className="bg-muted">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">{t("validationAny")}</SelectItem>
+                <SelectItem value="email">{t("validationEmail")}</SelectItem>
+                <SelectItem value="phone">{t("validationPhone")}</SelectItem>
+                <SelectItem value="regex">{t("validationRegex")}</SelectItem>
+              </SelectContent>
+            </Select>
+            {(cfg as { validation?: string }).validation === "regex" && (
+              <Input
+                value={(cfg as { regex?: string }).regex ?? ""}
+                onChange={(e) => onUpdateConfig({ regex: e.target.value })}
+                placeholder="^[A-Z]{2}-\d{4}$"
+                aria-label={t("regexLabel")}
+                className="mt-2 bg-muted font-mono text-xs"
+              />
+            )}
+            <p className="mt-1 text-[10px] text-muted-foreground">{t("regexHelp")}</p>
           </div>
           <NextNodeRow
             value={(cfg as { next_node_key?: string }).next_node_key ?? ""}
@@ -911,9 +940,14 @@ function SendMediaForm({
 
   const handleFile = useCallback(
     async (file: File) => {
-      if (file.size > MEDIA_MAX_BYTES) {
+      // F7: Meta's cap depends on the media type.
+      const tooBig = mediaSizeProblem(mediaType, file.size);
+      if (tooBig) {
         toast.error(
-          t("fileTooLarge", { size: (file.size / 1024 / 1024).toFixed(1) }),
+          t("fileTooLarge", {
+            size: (file.size / 1024 / 1024).toFixed(1),
+            limit: tooBig.limitMb,
+          }),
         );
         return;
       }

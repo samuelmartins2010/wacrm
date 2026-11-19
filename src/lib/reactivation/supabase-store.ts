@@ -81,6 +81,17 @@ export function supabaseRunnerStore(db: SupabaseClient): RunnerStore {
       return { enrollment, contact, campaignStatus: campaign.status }
     },
 
+    async hasActiveFlowRun(contactId) {
+      const { data, error } = await db
+        .from('flow_runs')
+        .select('id')
+        .eq('contact_id', contactId)
+        .eq('status', 'active')
+        .limit(1)
+      check(error, 'hasActiveFlowRun')
+      return (data ?? []).length > 0
+    },
+
     async getSend(enrollmentId, step) {
       const { data, error } = await db
         .from('reactivation_sends')

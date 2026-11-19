@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { loadAccountRefs, validateStepReferences } from '@/lib/automations/references'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
-  const { name, description, trigger_type, trigger_config, is_active, steps, template } = body
+  const { name, description, trigger_type, trigger_config, is_active, steps, template, continue_on_reply } = body
 
   let effectiveSteps: BuilderStepInput[] | undefined = steps
   let effectiveName = name
@@ -83,6 +84,20 @@ export async function POST(request: Request) {
       { error: 'name and trigger_type are required' },
       { status: 400 },
     )
+  }
+
+  // A6: references to account data must exist (every save, drafts too).
+  if (Array.isArray(effectiveSteps) && effectiveSteps.length > 0) {
+    const refIssues = validateStepReferences(
+      effectiveSteps as unknown as Parameters<typeof validateStepReferences>[0],
+      await loadAccountRefs(supabaseAdmin(), accountId),
+    )
+    if (refIssues.length > 0) {
+      return NextResponse.json(
+        { error: 'Automation references data that does not exist in this account', issues: refIssues },
+        { status: 400 },
+      )
+    }
   }
 
   // Block activation of a clearly broken automation up-front instead of
@@ -115,6 +130,7 @@ export async function POST(request: Request) {
       trigger_type: effectiveTriggerType,
       trigger_config: effectiveTriggerConfig ?? {},
       is_active: !!is_active,
+      continue_on_reply: continue_on_reply === true,
     })
     .select()
     .single()

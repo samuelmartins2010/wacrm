@@ -40,6 +40,9 @@ import {
   engineSendText,
 } from "./meta-send";
 import { decideFallback, resolveFallbackPolicy } from "./fallback";
+import { isValidCollectedInput } from "./collect-validation";
+import { interpolateVars } from "./vars";
+import { keywordMatches } from "@/lib/keywords";
 import {
   type CollectInputNodeConfig,
   type ConditionNodeConfig,
@@ -88,25 +91,16 @@ export function matchReplyId(
 }
 
 /**
- * Case-insensitive contains/exact match against a list of keywords.
- * Used by the trigger evaluator. Stable enough that the v3 builder
- * UI can preview matches by passing canned strings.
+ * Keyword trigger match — D5 rule shared with automations
+ * (src/lib/keywords.ts): case/accents ignored, "contains" = whole words,
+ * "exact" ignores surrounding punctuation. `case_sensitive` is ignored.
  */
 export function matchesKeywordTrigger(
   text: string,
   cfg: KeywordTriggerConfig,
 ): boolean {
   if (!text || !cfg.keywords?.length) return false;
-  const matchType = cfg.match_type ?? "contains";
-  const haystack = cfg.case_sensitive ? text : text.toLowerCase();
-  for (const raw of cfg.keywords) {
-    if (!raw) continue;
-    const needle = cfg.case_sensitive ? raw : raw.toLowerCase();
-    if (matchType === "exact" ? haystack === needle : haystack.includes(needle)) {
-      return true;
-    }
-  }
-  return false;
+  return keywordMatches(text, cfg.keywords, cfg.match_type ?? "contains");
 }
 
 /** Nodes that advance to a next_node_key without waiting for input. */
@@ -256,7 +250,8 @@ async function logEvent(
     | "handoff"
     | "timeout"
     | "error"
-    | "completed",
+    | "completed"
+    | "node_removed",
   node_key: string | null,
   payload: Record<string, unknown> = {},
 ): Promise<void> {
@@ -363,9 +358,9 @@ async function sendButtonsAndSuspend(
     userId: run.user_id,
     conversationId: run.conversation_id!,
     contactId: run.contact_id!,
-    bodyText: cfg.text,
-    headerText: cfg.header_text,
-    footerText: cfg.footer_text,
+    bodyText: interpolateVars(cfg.text, run.vars),
+    headerText: cfg.header_text ? interpolateVars(cfg.header_text, run.vars) : undefined,
+    footerText: cfg.footer_text ? interpolateVars(cfg.footer_text, run.vars) : undefined,
     buttons: cfg.buttons.map((b) => ({ id: b.reply_id, title: b.title })),
   });
   await logEvent(db, run.id, "message_sent", node.node_key, {
@@ -399,10 +394,10 @@ async function sendListAndSuspend(
     userId: run.user_id,
     conversationId: run.conversation_id!,
     contactId: run.contact_id!,
-    bodyText: cfg.text,
+    bodyText: interpolateVars(cfg.text, run.vars),
     buttonLabel: cfg.button_label,
-    headerText: cfg.header_text,
-    footerText: cfg.footer_text,
+    headerText: cfg.header_text ? interpolateVars(cfg.header_text, run.vars) : undefined,
+    footerText: cfg.footer_text ? interpolateVars(cfg.footer_text, run.vars) : undefined,
     sections: cfg.sections.map((s) => ({
       title: s.title,
       rows: s.rows.map((r) => ({
@@ -430,28 +425,43 @@ async function sendListAndSuspend(
   return { outcome: "advanced", node_key: node.node_key };
 }
 
+/**
+ * Hand a run over to a human: conversation → pending (optionally
+ * assigned) and the run ends as handed_off with `reason`.
+ */
+async function handOffRun(
+  db: AdminClient,
+  run: FlowRunRow,
+  reason: string,
+  assignTo?: string,
+): Promise<void> {
+  if (run.conversation_id) {
+    const now = new Date().toISOString();
+    // D7: a human owns the thread now — AI and content automations stay
+    // quiet until the conversation is closed or reopened (migration 049).
+    const convUpdate: Record<string, unknown> = {
+      status: "pending",
+      ai_autoreply_disabled: true,
+      bot_handoff_at: now,
+      updated_at: now,
+    };
+    if (assignTo) convUpdate.assigned_agent_id = assignTo;
+    await db.from("conversations").update(convUpdate).eq("id", run.conversation_id);
+  }
+  await endRun(db, run.id, "handed_off", reason);
+}
+
 async function executeHandoff(
   db: AdminClient,
   run: FlowRunRow,
   node: FlowNodeRow,
 ): Promise<void> {
   const cfg = node.config as { assign_to?: string; note?: string };
-  const convUpdate: Record<string, unknown> = {
-    status: "pending",
-    updated_at: new Date().toISOString(),
-  };
-  if (cfg.assign_to) convUpdate.assigned_agent_id = cfg.assign_to;
-  if (run.conversation_id) {
-    await db
-      .from("conversations")
-      .update(convUpdate)
-      .eq("id", run.conversation_id);
-  }
   await logEvent(db, run.id, "handoff", node.node_key, {
-    note: cfg.note ?? null,
+    note: cfg.note ? interpolateVars(cfg.note, run.vars) : null,
     assigned_to: cfg.assign_to ?? null,
   });
-  await endRun(db, run.id, "handed_off", "handoff_node");
+  await handOffRun(db, run, "handoff_node", cfg.assign_to);
 }
 
 /**
@@ -507,19 +517,6 @@ async function evaluateConditionNode(
   });
 }
 
-/**
- * Tiny `{{vars.foo}}` interpolation. Used by send_message + collect_input
- * prompt text so a captured `name` can show up in the next prompt
- * ("Thanks {{vars.name}}, what's your email?"). Missing vars render as
- * empty string — the same behavior as the automations engine.
- */
-function interpolateVars(template: string, vars: Record<string, unknown>): string {
-  if (!template) return "";
-  return template.replace(/\{\{vars\.([a-zA-Z0-9_]+)\}\}/g, (_, key) => {
-    const v = vars[key];
-    return v === undefined || v === null ? "" : String(v);
-  });
-}
 
 async function endRun(
   db: AdminClient,
@@ -537,12 +534,49 @@ async function endRun(
     .eq("id", runId);
 }
 
+/**
+ * F8: an active run past its flow's on_timeout_hours would have been
+ * swept by the cron. If the cron did not run, the contact must not stay
+ * stuck: expire it now (same result as the sweep) so the inbound can
+ * start a new flow or reach automations/AI. Returns whether it expired.
+ */
+async function expireIfStale(db: AdminClient, run: FlowRunRow): Promise<boolean> {
+  const { data: flow } = await db
+    .from("flows")
+    .select("fallback_policy")
+    .eq("id", run.flow_id)
+    .maybeSingle();
+  const policy = resolveFallbackPolicy(
+    (flow as { fallback_policy?: unknown } | null)?.fallback_policy,
+  );
+  const ageHours = (Date.now() - new Date(run.last_advanced_at).getTime()) / 3_600_000;
+  if (!(ageHours >= policy.on_timeout_hours)) return false;
+  await db
+    .from("flow_runs")
+    .update({
+      status: "timed_out",
+      ended_at: new Date().toISOString(),
+      end_reason: "stale_on_inbound",
+    })
+    .eq("id", run.id)
+    .eq("status", "active");
+  await logEvent(db, run.id, "timeout", run.current_node_key, {
+    reason: "stale_on_inbound",
+    policy_hours: policy.on_timeout_hours,
+    age_hours: Math.round(ageHours * 10) / 10,
+  });
+  return true;
+}
+
 // ============================================================
 // The synchronous advance loop. Walks through auto-advance nodes
 // until it hits one that suspends (send_buttons/send_list) or
 // terminates (handoff/end). Each suspending node persists the
 // new current_node_key before returning.
 // ============================================================
+
+/** F1: most messages one advance may send before it is stopped. */
+export const MAX_MESSAGES_PER_ADVANCE = 10;
 
 async function advanceFromNodeKey(
   db: AdminClient,
@@ -551,8 +585,21 @@ async function advanceFromNodeKey(
   nodes: Map<string, FlowNodeRow>,
 ): Promise<{ outcome: "advanced" | "completed" | "handed_off" }> {
   let currentKey: string | null = startNodeKey;
-  // Defensive cap — if a flow has a cycle (which the validator
-  // SHOULD catch but doesn't yet in v1), we bail rather than loop.
+  // Messages sent by this single advance (F1). The validator blocks
+  // loops that never wait for the customer; this is the runtime guard
+  // for flows saved before that rule, so a bad graph can't flood the
+  // customer.
+  let messagesSent = 0;
+  const overBudget = async (nodeKey: string): Promise<boolean> => {
+    if (messagesSent < MAX_MESSAGES_PER_ADVANCE) return false;
+    await logEvent(db, run.id, "error", nodeKey, {
+      reason: "too_many_messages_per_advance",
+      limit: MAX_MESSAGES_PER_ADVANCE,
+    });
+    await endRun(db, run.id, "failed", "too_many_messages_per_advance");
+    return true;
+  };
+  // Defensive cap on iterations (non-sending nodes can loop too).
   for (let safety = 0; safety < 64; safety += 1) {
     if (!currentKey) {
       await logEvent(db, run.id, "error", null, {
@@ -579,6 +626,7 @@ async function advanceFromNodeKey(
     }
     if (node.node_type === "send_message") {
       const cfg = node.config as unknown as SendMessageNodeConfig;
+      if (await overBudget(node.node_key)) return { outcome: "completed" };
       try {
         const { whatsapp_message_id } = await engineSendText({
           accountId: run.account_id,
@@ -591,6 +639,7 @@ async function advanceFromNodeKey(
           node_type: "send_message",
           whatsapp_message_id,
         });
+        messagesSent += 1;
       } catch (err) {
         await logEvent(db, run.id, "error", node.node_key, {
           reason: "send_text_failed",
@@ -604,6 +653,7 @@ async function advanceFromNodeKey(
     }
     if (node.node_type === "send_media") {
       const cfg = node.config as unknown as SendMediaNodeConfig;
+      if (await overBudget(node.node_key)) return { outcome: "completed" };
       try {
         const { whatsapp_message_id } = await engineSendMedia({
           accountId: run.account_id,
@@ -622,6 +672,7 @@ async function advanceFromNodeKey(
           media_type: cfg.media_type,
           whatsapp_message_id,
         });
+        messagesSent += 1;
       } catch (err) {
         await logEvent(db, run.id, "error", node.node_key, {
           reason: "send_media_failed",
@@ -831,7 +882,7 @@ export async function dispatchInboundToFlows(
 ): Promise<DispatchInboundResult> {
   const db = supabaseAdmin();
   try {
-    const activeRun = await loadActiveRunForContact(
+    let activeRun = await loadActiveRunForContact(
       db,
       input.accountId,
       input.contactId,
@@ -840,6 +891,12 @@ export async function dispatchInboundToFlows(
     // Idempotency — only matters if there's already a run for this
     // contact. For new runs, the partial unique index catches duplicate
     // starts at INSERT time.
+    // F8: a run the cron should already have timed out does not hold
+    // the contact — expire it here and treat the message as fresh.
+    if (activeRun && (await expireIfStale(db, activeRun))) {
+      activeRun = null;
+    }
+
     if (activeRun) {
       const dupe = await isDuplicateInbound(
         db,
@@ -914,8 +971,14 @@ async function handleReplyForActiveRun(
 
   const currentNode = nodes.get(run.current_node_key) ?? null;
   if (!currentNode) {
-    await endRun(db, run.id, "failed", "current_node_not_found");
-    return { consumed: true, flow_run_id: run.id, outcome: "no_match" };
+    // D8: the flow was edited and the node this customer is waiting on
+    // is gone. Don't leave them without an answer: hand off to an agent
+    // and record why, visibly, in the runs viewer.
+    await logEvent(db, run.id, "node_removed", run.current_node_key, {
+      reason: "current_node_removed_by_edit",
+    });
+    await handOffRun(db, run, "node_removed");
+    return { consumed: true, flow_run_id: run.id, outcome: "handed_off" };
   }
 
   // Two ways a reply can advance:
@@ -936,7 +999,9 @@ async function handleReplyForActiveRun(
   ) {
     const cfg = currentNode.config as unknown as CollectInputNodeConfig;
     const captured = message.text.trim();
-    if (captured.length > 0 && cfg.var_key) {
+    // D9: an answer that fails the node's validation does not match;
+    // it falls through to the fallback policy (re-ask, then handoff).
+    if (captured.length > 0 && cfg.var_key && isValidCollectedInput(captured, cfg)) {
       // Persist captured value + reset reprompt count atomically.
       const newVars = { ...run.vars, [cfg.var_key]: captured };
       const { error: capErr } = await db
@@ -1031,16 +1096,10 @@ async function handleReplyForActiveRun(
     return { consumed: true, flow_run_id: run.id, outcome: "fallback_fired" };
   }
   if (action.type === "handoff") {
-    if (run.conversation_id) {
-      await db
-        .from("conversations")
-        .update({ status: "pending", updated_at: new Date().toISOString() })
-        .eq("id", run.conversation_id);
-    }
     await logEvent(db, run.id, "handoff", run.current_node_key, {
       reason: "fallback_exhausted",
     });
-    await endRun(db, run.id, "handed_off", "fallback_exhausted");
+    await handOffRun(db, run, "fallback_exhausted");
     return { consumed: true, flow_run_id: run.id, outcome: "handed_off" };
   }
   // action.type === 'end'
@@ -1115,3 +1174,6 @@ async function startNewRun(
     outcome: outcome.outcome === "advanced" ? "started" : outcome.outcome,
   };
 }
+
+/** Internals exposed for unit tests only. */
+export const __flowEngineTest = { advanceFromNodeKey, handleReplyForActiveRun, expireIfStale };

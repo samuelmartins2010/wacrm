@@ -43,7 +43,6 @@
     "flows": "Fluxos",
     "aiAgents": "Agentes de IA",
     "settings": "Configurações",
-    "beta": "Beta",
     "unreadConversations": "{count} {count, plural, =1 {conversa não lida} other {conversas não lidas}}",
     "unreadNotifications": "{count} {count, plural, =1 {notificação não lida} other {notificações não lidas}}",
     "roleOwner": "Proprietário",
@@ -74,7 +73,8 @@
     "menuProfile": "Perfil",
     "menuSettings": "Configurações",
     "menuSignOut": "Sair",
-    "reactivation": "Reativação"
+    "reactivation": "Reativação",
+    "flows": "Fluxos"
   },
   "ModeToggle": {
     "switchMode": "Mudar para o modo {mode}"
@@ -340,7 +340,10 @@
       "toastExported": "{count} contato exportado",
       "toastExported_plural": "{count} contatos exportados",
       "toastExportEmpty": "Nenhum contato para exportar",
-      "toastExportFailed": "Falha ao exportar contatos"
+      "toastExportFailed": "Falha ao exportar contatos",
+      "tagSelected": "Etiquetar",
+      "toastBulkTagged": "Etiqueta aplicada a {count} contato(s). Automações de etiqueta não disparam em operações em massa.",
+      "toastBulkTagFailed": "Não foi possível aplicar a etiqueta."
     },
     "form": {
       "addTitle": "Adicionar contato",
@@ -384,7 +387,8 @@
         "deals": "Negócios",
         "noTags": "Nenhuma etiqueta",
         "noDeals": "Nenhum negócio",
-        "addNotePlaceholder": "Adicionar uma nota..."
+        "addNotePlaceholder": "Adicionar uma nota...",
+        "tags": "Etiquetas"
       },
       "actions": {
         "edit": "Editar",
@@ -433,7 +437,9 @@
       "toastCustomFieldsSaved": "Campos personalizados salvos",
       "toastCustomFieldsFailed": "Falha ao salvar campos personalizados",
       "toastTemplateSent": "Modelo \"{name}\" enviado",
-      "toastTemplateFailed": "Falha ao enviar modelo: {reason}"
+      "toastTemplateFailed": "Falha ao enviar modelo: {reason}",
+      "name": "Nome",
+      "networkError": "erro de rede"
     },
     "importModal": {
       "title": "Importar contatos",
@@ -592,7 +598,8 @@
       "toastMoveOrDeleteDeals": "Mova ou exclua os negócios desta etapa primeiro",
       "toastFailedDeleteStage": "Falha ao excluir etapa",
       "toastFailedDeletePipeline": "Falha ao excluir funil",
-      "toastDeleted": "Funil excluído"
+      "toastDeleted": "Funil excluído",
+      "toastNotAllowed": "Sem permissão para alterar este funil. Peça a um administrador."
     },
     "analytics": {
       "totalDeals": "Total de negócios",
@@ -608,6 +615,24 @@
       "lostThisMonth": "Perdidos este mês",
       "lostThisMonthTooltip": "Negócios marcados como Perdidos desde o primeiro dia do mês atual.",
       "howCalculated": "Como {label} é calculado"
+    },
+    "defaultPipeline": {
+      "name": "Funil de vendas",
+      "stages": {
+        "newLead": "Novo lead",
+        "qualified": "Qualificado",
+        "proposalSent": "Proposta enviada",
+        "negotiation": "Negociação",
+        "won": "Ganho"
+      }
+    },
+    "dnd": {
+      "instructions": "Para pegar um item, pressione espaço ou Enter. Use as setas para mover e espaço ou Enter de novo para soltar. Esc cancela.",
+      "dragStart": "Item selecionado.",
+      "dragOver": "Item sobre uma nova posição.",
+      "dragOverNone": "Item fora de uma posição válida.",
+      "dragEnd": "Item solto.",
+      "dragCancel": "Movimento cancelado. O item voltou ao lugar."
     }
   },
   "Broadcasts": {
@@ -821,7 +846,9 @@
         "updateError": "Falha ao atualizar",
         "duplicateError": "Falha ao duplicar",
         "deleteError": "Falha ao excluir"
-      }
+      },
+      "sameTriggerWarning": "Mesmo gatilho que: {others}. Todas rodam, na ordem de criação — esta é a {order}ª de {total}.",
+      "timeBasedDeprecated": "O gatilho \"Baseado em horário\" não está funcionando e não pode mais ser escolhido. Esta automação nunca dispara — troque o gatilho ou desative-a."
     },
     "edit": {
       "loading": "Carregando...",
@@ -840,7 +867,9 @@
       "status": {
         "success": "sucesso",
         "partial": "parcial",
-        "failed": "falhou"
+        "failed": "falhou",
+        "cancelled": "Cancelada",
+        "waiting": "Aguardando"
       },
       "back": "Voltar",
       "backAria": "Voltar"
@@ -998,7 +1027,11 @@
         "matchExact": "Exato",
         "closeConversationHint": "Define o status da conversa como \"fechada\". Nenhuma configuração necessária."
       },
-      "cronPlaceholder": "Expressão cron ou HH:mm"
+      "cronPlaceholder": "Expressão cron ou HH:mm",
+      "continueOnReply": "Continuar mesmo se o contato responder",
+      "continueOnReplyHelp": "Desligado (padrão): se o contato mandar mensagem durante uma espera, o restante desta automação é cancelado.",
+      "timeBasedDeprecated": "O gatilho \"Baseado em horário\" não está funcionando e não pode mais ser escolhido. Esta automação nunca dispara — troque o gatilho ou desative-a.",
+      "delete": "Excluir"
     },
     "templates": {
       "welcome_message": {
@@ -1022,7 +1055,6 @@
   "Flows": {
     "list": {
       "title": "Fluxos",
-      "beta": "Beta",
       "description": "Crie conversas ramificadas por botões no WhatsApp. Útil para menus, perguntas frequentes e triagem antes de um humano assumir.",
       "newFlow": "Novo fluxo",
       "statusDraft": "Rascunho",
@@ -1154,7 +1186,7 @@
         "fileLabel": "Arquivo",
         "removeFile": "Remover arquivo",
         "uploading": "Enviando…",
-        "clickToUpload": "Clique para enviar (máx. 16 MB)",
+        "clickToUpload": "Clique para enviar (imagem até 5 MB, vídeo 16 MB, documento 100 MB)",
         "captionLabel": "Legenda (opcional, exibida abaixo da mídia)",
         "filenameLabel": "Nome do arquivo exibido ao cliente (apenas documentos)",
         "filenamePlaceholder": "fatura.pdf",
@@ -1166,7 +1198,14 @@
         "removeSectionAria": "Remover seção",
         "fileUploaded": "Arquivo enviado.",
         "uploadFailed": "Falha no envio.",
-        "fileTooLarge": "O arquivo tem {size} MB — o limite é 16 MB."
+        "fileTooLarge": "O arquivo tem {size} MB — o limite para este tipo é {limit} MB.",
+        "validationLabel": "Validar resposta",
+        "validationAny": "Qualquer texto",
+        "validationEmail": "E-mail",
+        "validationPhone": "Telefone",
+        "validationRegex": "Expressão regular",
+        "regexLabel": "Expressão regular",
+        "regexHelp": "Se a resposta não bater, a pergunta é reenviada (até o limite de tentativas do fluxo)."
       },
       "categories": {
         "messaging": "Mensagens",
@@ -1292,7 +1331,11 @@
         "setTagNeedsTag": "Marcar contato precisa de uma tag para aplicar.",
         "setTagNeedsNext": "Marcar contato deve apontar para um próximo nó.",
         "setTagPointsToMissing": "Marcar contato aponta para um nó inexistente \"{key}\".",
-        "unknownNodeType": "Tipo de nó desconhecido \"{type}\"."
+        "unknownNodeType": "Tipo de nó desconhecido \"{type}\".",
+        "cycleWithoutWait": "Loop que nunca espera o cliente: {path}. Inclua um nó que aguarde resposta (botões, lista ou coletar resposta).",
+        "collectInputRegexMissing": "A validação por regex precisa de uma expressão regular.",
+        "collectInputRegexInvalid": "A expressão regular é inválida.",
+        "varUnknown": "A variável \"'{{'vars.{name}'}}'\" não é capturada por nenhum nó de coletar resposta e será enviada vazia."
       }
     },
     "editorState": {
@@ -1369,6 +1412,10 @@
           "handoffNote": "Novo lead — nome='{{vars.name}}', e-mail='{{vars.email}}', empresa='{{vars.company}}'."
         }
       }
+    },
+    "api": {
+      "saveBlocked": "Não é possível salvar o fluxo ativo — corrija os problemas abaixo antes.",
+      "activateBlocked": "Não é possível ativar o fluxo — corrija os problemas abaixo antes."
     }
   },
   "Settings": {

@@ -136,6 +136,11 @@ class MemStore implements RunnerStore {
       campaignStatus: this.campaigns.get(e.campaign_id)!.status,
     }
   }
+  /** D11: contacts currently inside an active flow run. */
+  activeFlowContacts = new Set<string>()
+  async hasActiveFlowRun(contactId: string) {
+    return this.activeFlowContacts.has(contactId)
+  }
   async getSend(enrollmentId: string, step: number) {
     return this.sends.find((s) => s.enrollment_id === enrollmentId && s.step === step) ?? null
   }
@@ -413,6 +418,26 @@ describe('runReactivation', () => {
     await runReactivation(deps, NOW)
     expect(send).not.toHaveBeenCalled()
     expect(store.enrollments.get('e1')).toMatchObject({ status: 'replied', replied_step: 1 })
+  })
+
+  it('D11: postpones the touch while the contact is inside an active flow, sends it once the flow ends', async () => {
+    const { store, send, deps } = setup()
+    store.addEnrollment('e1')
+    store.activeFlowContacts.add('c-e1')
+    const r1 = await runReactivation(deps, NOW)
+    expect(send).not.toHaveBeenCalled()
+    expect(r1.deferred).toBe(1)
+    expect(store.sends).toHaveLength(0)
+    expect(store.enrollments.get('e1')).toMatchObject({ status: 'active', current_step: 0 })
+    // due again on the next round, not pushed days away
+    expect(new Date(store.enrollments.get('e1')!.next_run_at!).getTime()).toBeLessThanOrEqual(NOW.getTime())
+
+    store.activeFlowContacts.delete('c-e1') // flow finished
+    const later = new Date(NOW.getTime() + 10 * 60_000)
+    const r2 = await runReactivation(deps, later)
+    expect(r2.sent).toBe(1)
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(store.enrollments.get('e1')!.current_step).toBe(1)
   })
 
   it('does not overwrite a reply that arrives during the send', async () => {

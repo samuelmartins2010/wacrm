@@ -43,7 +43,6 @@
     "flows": "Flows",
     "aiAgents": "AI Agents",
     "settings": "Settings",
-    "beta": "Beta",
     "unreadConversations": "{count} unread {count, plural, =1 {conversation} other {conversations}}",
     "unreadNotifications": "{count} unread {count, plural, =1 {notification} other {notifications}}",
     "roleOwner": "Owner",
@@ -74,7 +73,8 @@
     "menuProfile": "Profile",
     "menuSettings": "Settings",
     "menuSignOut": "Sign out",
-    "reactivation": "Reactivation"
+    "reactivation": "Reactivation",
+    "flows": "Flows"
   },
   "ModeToggle": {
     "switchMode": "Switch to {mode} mode"
@@ -340,7 +340,10 @@
       "toastExported": "{count} contact exported",
       "toastExported_plural": "{count} contacts exported",
       "toastExportEmpty": "No contacts to export",
-      "toastExportFailed": "Failed to export contacts"
+      "toastExportFailed": "Failed to export contacts",
+      "tagSelected": "Tag",
+      "toastBulkTagged": "Tag applied to {count} contact(s). Tag automations do not fire for bulk operations.",
+      "toastBulkTagFailed": "Could not apply the tag."
     },
     "form": {
       "addTitle": "Add Contact",
@@ -384,7 +387,8 @@
         "deals": "Deals",
         "noTags": "No tags",
         "noDeals": "No deals",
-        "addNotePlaceholder": "Add a note..."
+        "addNotePlaceholder": "Add a note...",
+        "tags": "Tags"
       },
       "actions": {
         "edit": "Edit",
@@ -433,7 +437,9 @@
       "toastCustomFieldsSaved": "Custom fields saved",
       "toastCustomFieldsFailed": "Failed to save custom fields",
       "toastTemplateSent": "Template \"{name}\" sent",
-      "toastTemplateFailed": "Failed to send template: {reason}"
+      "toastTemplateFailed": "Failed to send template: {reason}",
+      "name": "Name",
+      "networkError": "network error"
     },
     "importModal": {
       "title": "Import Contacts",
@@ -592,7 +598,8 @@
       "toastMoveOrDeleteDeals": "Move or delete deals in this stage first",
       "toastFailedDeleteStage": "Failed to delete stage",
       "toastFailedDeletePipeline": "Failed to delete pipeline",
-      "toastDeleted": "Pipeline deleted"
+      "toastDeleted": "Pipeline deleted",
+      "toastNotAllowed": "You are not allowed to change this pipeline. Ask an admin."
     },
     "analytics": {
       "totalDeals": "Total Deals",
@@ -608,6 +615,24 @@
       "lostThisMonth": "Lost This Month",
       "lostThisMonthTooltip": "Deals marked as Lost since the first day of the current month.",
       "howCalculated": "How {label} is calculated"
+    },
+    "defaultPipeline": {
+      "name": "Sales Pipeline",
+      "stages": {
+        "newLead": "New Lead",
+        "qualified": "Qualified",
+        "proposalSent": "Proposal Sent",
+        "negotiation": "Negotiation",
+        "won": "Won"
+      }
+    },
+    "dnd": {
+      "instructions": "To pick up an item, press space or enter. Use the arrow keys to move it and press space or enter again to drop it. Press escape to cancel.",
+      "dragStart": "Item picked up.",
+      "dragOver": "Item over a new position.",
+      "dragOverNone": "Item is not over a valid position.",
+      "dragEnd": "Item dropped.",
+      "dragCancel": "Dragging was cancelled. The item was returned."
     }
   },
   "Broadcasts": {
@@ -821,7 +846,9 @@
         "updateError": "Failed to update",
         "duplicateError": "Failed to duplicate",
         "deleteError": "Failed to delete"
-      }
+      },
+      "sameTriggerWarning": "Same trigger as: {others}. All of them run, in creation order — this one is #{order} of {total}.",
+      "timeBasedDeprecated": "The \"Time-based\" trigger does not work and can no longer be chosen. This automation never fires — change the trigger or deactivate it."
     },
     "edit": {
       "loading": "Loading...",
@@ -840,7 +867,9 @@
       "status": {
         "success": "success",
         "partial": "partial",
-        "failed": "failed"
+        "failed": "failed",
+        "cancelled": "Cancelled",
+        "waiting": "Waiting"
       },
       "back": "Back",
       "backAria": "Back"
@@ -998,7 +1027,11 @@
         "matchExact": "Exact",
         "closeConversationHint": "Sets the conversation status to \"closed\". No configuration needed."
       },
-      "cronPlaceholder": "Cron expression or HH:mm"
+      "cronPlaceholder": "Cron expression or HH:mm",
+      "continueOnReply": "Continue even if the contact replies",
+      "continueOnReplyHelp": "Off (default): if the contact sends a message during a wait, the rest of this automation is cancelled.",
+      "timeBasedDeprecated": "The \"Time-based\" trigger does not work and can no longer be chosen. This automation never fires — change the trigger or deactivate it.",
+      "delete": "Delete"
     },
     "templates": {
       "welcome_message": {
@@ -1022,7 +1055,6 @@
   "Flows": {
     "list": {
       "title": "Flows",
-      "beta": "Beta",
       "description": "Build branching, button-driven WhatsApp conversations. Useful for menus, FAQs, and triage before a human steps in.",
       "newFlow": "New flow",
       "statusDraft": "Draft",
@@ -1154,7 +1186,7 @@
         "fileLabel": "File",
         "removeFile": "Remove file",
         "uploading": "Uploading…",
-        "clickToUpload": "Click to upload (max 16 MB)",
+        "clickToUpload": "Click to upload (image up to 5 MB, video 16 MB, document 100 MB)",
         "captionLabel": "Caption (optional, shown under the media)",
         "filenameLabel": "Filename shown to the customer (documents only)",
         "filenamePlaceholder": "invoice.pdf",
@@ -1166,7 +1198,14 @@
         "removeSectionAria": "Remove section",
         "fileUploaded": "File uploaded.",
         "uploadFailed": "Upload failed.",
-        "fileTooLarge": "File is {size} MB — limit is 16 MB."
+        "fileTooLarge": "File is {size} MB — the limit for this type is {limit} MB.",
+        "validationLabel": "Validate answer",
+        "validationAny": "Any text",
+        "validationEmail": "Email",
+        "validationPhone": "Phone",
+        "validationRegex": "Regular expression",
+        "regexLabel": "Regular expression",
+        "regexHelp": "If the answer does not match, the question is asked again (up to the flow retry limit)."
       },
       "categories": {
         "messaging": "Messaging",
@@ -1292,7 +1331,11 @@
         "setTagNeedsTag": "Set-tag needs a tag to apply.",
         "setTagNeedsNext": "Set-tag must point to a next node.",
         "setTagPointsToMissing": "Set-tag points to non-existent node \"{key}\".",
-        "unknownNodeType": "Unknown node type \"{type}\"."
+        "unknownNodeType": "Unknown node type \"{type}\".",
+        "cycleWithoutWait": "Loop that never waits for the customer: {path}. Add a node that waits for a reply (buttons, list or collect input).",
+        "collectInputRegexMissing": "Regex validation needs a regular expression.",
+        "collectInputRegexInvalid": "The regular expression is invalid.",
+        "varUnknown": "Variable \"'{{'vars.{name}'}}'\" is not captured by any collect-input node and will be sent empty."
       }
     },
     "editorState": {
@@ -1369,6 +1412,10 @@
           "handoffNote": "New lead — name='{{vars.name}}', email='{{vars.email}}', company='{{vars.company}}'."
         }
       }
+    },
+    "api": {
+      "saveBlocked": "Cannot save the active flow — fix the issues below first.",
+      "activateBlocked": "Cannot activate flow — fix the issues below first."
     }
   },
   "Settings": {

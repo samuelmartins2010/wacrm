@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Bar,
   BarChart,
@@ -50,18 +50,24 @@ export function DashboardOverview() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const res = await fetch('/api/superadmin/dashboard', { cache: 'no-store' })
-    if (res.ok) {
-      setData(await res.json())
-    }
-    setLoading(false)
-  }, [])
-
+  // Loaded once on mount. State is only set in the promise callbacks
+  // (never synchronously in the effect body); `loading` starts true.
   useEffect(() => {
-    load()
-  }, [load])
+    let cancelled = false
+    fetch('/api/superadmin/dashboard', { cache: 'no-store' })
+      .then((res) => (res.ok ? (res.json() as Promise<DashboardData>) : null))
+      .then((json) => {
+        if (cancelled) return
+        if (json) setData(json)
+        setLoading(false)
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   if (loading) {
     return <p className="text-sm text-muted-foreground">Carregando...</p>

@@ -14,24 +14,29 @@ import { createClient } from "@/lib/supabase/client";
  * composer call this so the logic lives in exactly one place.
  */
 
-/** 16 MB — matches the `file_size_limit` on both buckets (migrations 016/020/023). */
-export const MEDIA_MAX_BYTES = 16 * 1024 * 1024;
+/** 100 MB — the bucket `file_size_limit` (migration 051), the largest per-kind cap. */
+export const MEDIA_MAX_BYTES = 100 * 1024 * 1024;
 
 /**
- * Per-kind upload ceilings that mirror Meta's WhatsApp Cloud API caps so
- * a file that the bucket would accept (≤16 MB) but Meta would reject is
- * caught client-side BEFORE upload — otherwise it lands in storage as an
- * orphan and the send fails with a confusing 400. Images are Meta's
- * tightest cap at 5 MB; documents are held at the 16 MB bucket limit
- * (Meta allows 100 MB, but the bucket — and shared-hosting upload UX —
- * caps lower).
+ * Per-kind upload ceilings = Meta's WhatsApp Cloud API caps (F7):
+ * image 5 MB, video and audio 16 MB, document 100 MB. Checked client-side
+ * BEFORE upload so the user sees the error on screen instead of an orphan
+ * file in storage and a send that fails later.
  */
 export const MEDIA_MAX_BYTES_BY_KIND = {
   image: 5 * 1024 * 1024,
   video: 16 * 1024 * 1024,
   audio: 16 * 1024 * 1024,
-  document: 16 * 1024 * 1024,
+  document: 100 * 1024 * 1024,
 } as const;
+
+export type MediaKind = keyof typeof MEDIA_MAX_BYTES_BY_KIND;
+
+/** null when `bytes` fits the Meta cap for `kind`, else the cap in MB. */
+export function mediaSizeProblem(kind: MediaKind, bytes: number): { limitMb: number } | null {
+  const max = MEDIA_MAX_BYTES_BY_KIND[kind];
+  return bytes > max ? { limitMb: max / 1024 / 1024 } : null;
+}
 
 /**
  * Build the account-scoped object path for an upload. Pure + exported so

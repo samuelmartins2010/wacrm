@@ -50,6 +50,7 @@ import {
   SlidersHorizontal,
   Filter,
   X,
+  Tag as TagIcon,
 } from 'lucide-react';
 import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
@@ -58,6 +59,7 @@ import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager
 import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
 import { useTranslations } from 'next-intl';
+import { bulkAddTag } from '@/lib/contacts/bulk-tag';
 import { buildContactsCsv, downloadCsv } from '@/lib/contacts/export-contacts-csv';
 
 // Export pages through the same filtered query in batches this size —
@@ -402,6 +404,20 @@ export default function ContactsPage() {
     });
   }
 
+  // D10: one tag on many contacts at once — a bulk operation, so it does
+  // not fire tag_added automations (only individual changes do).
+  async function handleBulkTag(tagId: string) {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    try {
+      const added = await bulkAddTag(supabase, ids, tagId);
+      toast.success(t('toastBulkTagged', { count: added }));
+      fetchContacts();
+    } catch {
+      toast.error(t('toastBulkTagFailed'));
+    }
+  }
+
   async function handleBulkDelete() {
     const ids = [...selected];
     if (ids.length === 0) return;
@@ -635,6 +651,25 @@ export default function ContactsPage() {
             >
               {t('clearSelection')}
             </Button>
+            {canEdit && allTags.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+                  <TagIcon className="size-4" />
+                  {t('tagSelected')}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="bg-popover border-border">
+                  {allTags.map((tag) => (
+                    <DropdownMenuItem
+                      key={tag.id}
+                      onClick={() => handleBulkTag(tag.id)}
+                      className="text-popover-foreground focus:bg-muted focus:text-foreground"
+                    >
+                      {tag.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <GatedButton
               variant="destructive"
               size="sm"

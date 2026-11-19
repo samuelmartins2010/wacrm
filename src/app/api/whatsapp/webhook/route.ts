@@ -5,7 +5,7 @@ import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
 import { normalizePhone } from '@/lib/whatsapp/phone-utils'
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
-import { runAutomationsForTrigger } from '@/lib/automations/engine'
+import { runAutomationsForTrigger, cancelWaitsOnContactReply, drainAutomationTriggerEvents } from '@/lib/automations/engine'
 import { engineSendText } from '@/lib/automations/meta-send'
 import {
   handleReactivationInbound,
@@ -16,6 +16,7 @@ import {
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { planAutomationTriggers, shouldRunAiReply, shouldRunFlows } from '@/lib/whatsapp/inbound-plan'
+import { recordFlowDeliveryFailure } from '@/lib/flows/delivery'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
   handleTemplateWebhookChange,
@@ -416,6 +417,20 @@ async function handleStatusUpdate(status: {
 
     if (recUpdateErr) {
       console.error('Error updating broadcast recipient status:', recUpdateErr)
+    }
+  }
+
+  // 2a) F6: a flow message that failed after Meta accepted it gets an
+  //     error event on its run (best-effort).
+  if (status.status === 'failed') {
+    try {
+      const e = status.errors?.[0]
+      await recordFlowDeliveryFailure(supabaseAdmin(), status.id, {
+        code: e?.code ?? null,
+        message: e?.error_data?.details || e?.message || e?.title || null,
+      })
+    } catch (err) {
+      console.error('recordFlowDeliveryFailure failed:', err)
     }
   }
 
@@ -822,8 +837,16 @@ async function processMessage(
   // Fire-and-forget: a slow or failing automation must not block the
   // webhook's 200 OK response to Meta.
   const inboundText = contentText ?? message.text?.body ?? ''
+  // D7: re-read the handoff flag — a flow may have just handed this
+  // conversation to a human in dispatchInboundToFlows above.
+  const { data: convFlags } = await supabaseAdmin()
+    .from('conversations')
+    .select('bot_handoff_at')
+    .eq('id', conversation.id)
+    .maybeSingle()
   const plan = {
     reactivationConsumed,
+    botsSilenced: !!convFlags?.bot_handoff_at,
     flowConsumed,
     interactiveReplyId,
     contactWasCreated: contactOutcome.wasCreated,
@@ -834,9 +857,16 @@ async function processMessage(
   // message; nothing fires for an opt-out the Reativação consumed.
   // new_contact_created / first_inbound_message are relationship
   // triggers (see planAutomationTriggers).
+  // D4 / A1: the contact wrote — automations parked at a wait for them
+  // stop here (unless "continue even if the contact replies" is on).
+  // Before this message's own triggers, so a repeated keyword can start
+  // a fresh run instead of colliding with the cancelled one.
+  // Also on an opt-out (SAIR): nothing more should go out after it.
+  await cancelWaitsOnContactReply(accountId, contactRecord.id)
   const automationTriggers = planAutomationTriggers(plan)
+  const automationRuns: Promise<void>[] = []
   for (const triggerType of automationTriggers) {
-    runAutomationsForTrigger({
+    automationRuns.push(runAutomationsForTrigger({
       accountId,
       triggerType,
       contactId: contactRecord.id,
@@ -847,7 +877,7 @@ async function processMessage(
         // trigger's exact-id match.
         interactive_reply_id: interactiveReplyId ?? undefined,
       },
-    }).catch((err) => console.error('[automations] dispatch failed:', err))
+    }).catch((err) => console.error('[automations] dispatch failed:', err)))
   }
 
   // AI auto-reply. Runs only for plain-text inbound the deterministic
@@ -863,6 +893,13 @@ async function processMessage(
       configOwnerUserId,
     })
   }
+
+  // D3: tags / assignments made above by flows, automations or the AI
+  // handoff fire tag_added / conversation_assigned now. Waits for this
+  // message's automation runs first (we are inside after(), so awaiting
+  // only keeps the function alive; Meta already got its 200).
+  await Promise.all(automationRuns)
+  await drainAutomationTriggerEvents(accountId)
 
   // message.received webhook (public API). Awaited — not fire-and-forget
   // — because we're inside the route's `after()` block, which only keeps

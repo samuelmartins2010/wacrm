@@ -32,23 +32,42 @@ const STATUS_BADGE: Record<AccountStatus, { label: string; variant: 'default' | 
   suspended: { label: 'Suspenso', variant: 'destructive' },
 }
 
+async function fetchAccounts(): Promise<AccountRow[] | null> {
+  const res = await fetch('/api/superadmin/accounts', { cache: 'no-store' })
+  if (!res.ok) return null
+  const json = await res.json()
+  return json.accounts ?? []
+}
+
 export function AccountsTable() {
   const [accounts, setAccounts] = useState<AccountRow[]>([])
   const [loading, setLoading] = useState(true)
   const [createOpen, setCreateOpen] = useState(false)
   const [editAccount, setEditAccount] = useState<AccountRow | null>(null)
 
-  const loadAccounts = useCallback(async () => {
-    setLoading(true)
-    const res = await fetch('/api/superadmin/accounts', { cache: 'no-store' })
-    if (res.ok) {
-      const json = await res.json()
-      setAccounts(json.accounts ?? [])
+  // Initial load: state is only set in the promise callbacks (never
+  // synchronously in the effect body); `loading` already starts true.
+  useEffect(() => {
+    let cancelled = false
+    fetchAccounts().then((rows) => {
+      if (cancelled) return
+      if (rows) setAccounts(rows)
+      setLoading(false)
+    }).catch(() => {
+      if (!cancelled) setLoading(false)
+    })
+    return () => {
+      cancelled = true
     }
-    setLoading(false)
   }, [])
 
-  useEffect(() => { loadAccounts() }, [loadAccounts])
+  // Reload after create/edit — an event handler, not an effect.
+  const loadAccounts = useCallback(async () => {
+    setLoading(true)
+    const rows = await fetchAccounts()
+    if (rows) setAccounts(rows)
+    setLoading(false)
+  }, [])
 
   return (
     <div>

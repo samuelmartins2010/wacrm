@@ -547,3 +547,97 @@ describe("reachableFromEntry", () => {
     expect(set).toEqual(new Set(["a", "b"]));
   });
 });
+
+describe("cycles that never wait for the customer (F1)", () => {
+  const flow = { name: "f", trigger_type: "keyword" as const, trigger_config: { keywords: ["x"] }, entry_node_id: "start" };
+  const cycleIssues = (nodes: { node_key: string; node_type: string; config: Record<string, unknown> }[]) =>
+    validateFlowForActivation(flow, nodes).filter((i) => i.severity === "error" && /loop/i.test(i.message));
+
+  it("blocks A → B → A between send_message nodes", () => {
+    const issues = cycleIssues([
+      { node_key: "start", node_type: "start", config: { next_node_key: "a" } },
+      { node_key: "a", node_type: "send_message", config: { text: "a", next_node_key: "b" } },
+      { node_key: "b", node_type: "send_message", config: { text: "b", next_node_key: "a" } },
+    ]);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].message).toMatch(/a → b → a|b → a → b/);
+  });
+
+  it("blocks a set_tag that points to itself", () => {
+    expect(
+      cycleIssues([
+        { node_key: "start", node_type: "start", config: { next_node_key: "t" } },
+        { node_key: "t", node_type: "set_tag", config: { mode: "add", tag_id: "x", next_node_key: "t" } },
+      ]),
+    ).toHaveLength(1);
+  });
+
+  it("allows a loop that goes through a node that waits for the customer", () => {
+    expect(
+      cycleIssues([
+        { node_key: "start", node_type: "start", config: { next_node_key: "menu" } },
+        {
+          node_key: "menu",
+          node_type: "send_buttons",
+          config: { text: "?", buttons: [{ reply_id: "again", title: "De novo", next_node_key: "info" }, { reply_id: "end", title: "Sair", next_node_key: "fim" }] },
+        },
+        { node_key: "info", node_type: "send_message", config: { text: "info", next_node_key: "menu" } },
+        { node_key: "fim", node_type: "end", config: {} },
+      ]),
+    ).toHaveLength(0);
+  });
+
+  it("allows a loop through collect_input", () => {
+    expect(
+      cycleIssues([
+        { node_key: "start", node_type: "start", config: { next_node_key: "ask" } },
+        { node_key: "ask", node_type: "collect_input", config: { prompt_text: "?", var_key: "x", next_node_key: "c" } },
+        { node_key: "c", node_type: "condition", config: { subject: "var", subject_key: "x", operator: "present", true_next: "fim", false_next: "ask" } },
+        { node_key: "fim", node_type: "end", config: {} },
+      ]),
+    ).toHaveLength(0);
+  });
+});
+
+describe("collect_input regex validation at save (D9)", () => {
+  const flow = { name: "f", trigger_type: "keyword" as const, trigger_config: { keywords: ["x"] }, entry_node_id: "start" };
+  const withAsk = (cfg: Record<string, unknown>) => [
+    { node_key: "start", node_type: "start", config: { next_node_key: "ask" } },
+    { node_key: "ask", node_type: "collect_input", config: { prompt_text: "?", var_key: "x", next_node_key: "fim", ...cfg } },
+    { node_key: "fim", node_type: "end", config: {} },
+  ];
+  const errors = (cfg: Record<string, unknown>) =>
+    validateFlowForActivation(flow, withAsk(cfg)).filter((i) => i.severity === "error");
+
+  it("regex validation needs a pattern", () => {
+    expect(errors({ validation: "regex" })[0]?.message).toMatch(/regular expression/i);
+  });
+  it("an invalid pattern is rejected", () => {
+    expect(errors({ validation: "regex", regex: "[" })[0]?.message).toMatch(/invalid/i);
+  });
+  it("email / phone need nothing else", () => {
+    expect(errors({ validation: "email" })).toHaveLength(0);
+    expect(errors({ validation: "phone" })).toHaveLength(0);
+  });
+});
+
+describe("unknown {{vars.x}} at save (F4)", () => {
+  const flow = { name: "f", trigger_type: "keyword" as const, trigger_config: { keywords: ["x"] }, entry_node_id: "start" };
+  const nodes = (text: string) => [
+    { node_key: "start", node_type: "start", config: { next_node_key: "ask" } },
+    { node_key: "ask", node_type: "collect_input", config: { prompt_text: "Nome?", var_key: "nome", next_node_key: "msg" } },
+    { node_key: "msg", node_type: "send_message", config: { text, next_node_key: "fim" } },
+    { node_key: "fim", node_type: "end", config: {} },
+  ];
+  const varWarnings = (text: string) =>
+    validateFlowForActivation(flow, nodes(text)).filter((i) => i.severity === "warning" && /variable/i.test(i.message));
+
+  it("warns about a variable no collect_input sets", () => {
+    const w = varWarnings("Oi {{vars.nome}}, seu pedido {{ vars.pedido }}");
+    expect(w).toHaveLength(1);
+    expect(w[0].message).toMatch(/pedido/);
+  });
+  it("does not warn for captured variables", () => {
+    expect(varWarnings("Oi {{ vars.nome }}")).toHaveLength(0);
+  });
+});

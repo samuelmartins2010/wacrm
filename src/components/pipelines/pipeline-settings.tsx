@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
+import { useDndA11y } from "./use-dnd-a11y";
 
 const STAGE_COLORS = [
   "#3b82f6",
@@ -70,6 +71,7 @@ export function PipelineSettings({
   onCreateNewPipeline,
 }: PipelineSettingsProps) {
   const t = useTranslations("Pipelines.settings");
+  const dndA11y = useDndA11y();
   const supabase = createClient();
 
   const [name, setName] = useState(pipeline.name);
@@ -122,7 +124,8 @@ export function PipelineSettings({
       supabase
         .from("pipelines")
         .update({ name: name.trim() })
-        .eq("id", pipeline.id),
+        .eq("id", pipeline.id)
+        .select("id"),
       supabase.from("pipeline_stages").upsert(stageRows, { onConflict: "id" }),
     ]);
 
@@ -130,6 +133,12 @@ export function PipelineSettings({
 
     if (renameRes.error || stagesRes.error) {
       toast.error(t("toastFailedSave"));
+      return;
+    }
+    // RLS turns a not-allowed UPDATE into "0 rows, no error" — never report
+    // that as saved.
+    if (!renameRes.data || renameRes.data.length === 0) {
+      toast.error(t("toastNotAllowed"));
       return;
     }
 
@@ -251,6 +260,7 @@ export function PipelineSettings({
               <div className="grid gap-2">
                 <Label className="text-muted-foreground">{t("stages")}</Label>
                 <DndContext
+                  accessibility={dndA11y}
                   sensors={sensors}
                   collisionDetection={closestCenter}
                   onDragEnd={handleReorder}
@@ -339,7 +349,7 @@ export function PipelineSettings({
               <Button
                 variant="destructive"
                 onClick={() => setShowDeleteConfirm(true)}
-                className="mr-auto bg-red-600 hover:bg-red-700"
+                className="mr-auto bg-red-600 text-white hover:bg-red-700"
               >
                 {t("deletePipeline")}
               </Button>

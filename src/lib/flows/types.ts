@@ -109,12 +109,9 @@ export interface HandoffNodeConfig {
 
 /**
  * Captures the customer's next free-text reply into
- * `flow_runs.vars[var_key]`, then advances.
- *
- * v1.5 ships without runtime validation (`validation` is accepted on
- * the config for forward compat but ignored by the runner); the
- * builder still surfaces the field so users can author flows that
- * v2 will start enforcing.
+ * `flow_runs.vars[var_key]`, then advances. `validation` is enforced by
+ * the runner (D9, collect-validation.ts): an answer that fails it is
+ * treated like an unknown reply and goes through the fallback policy.
  */
 export interface CollectInputNodeConfig {
   /** Prompt text sent to the customer before they reply. */
@@ -206,6 +203,7 @@ export interface KeywordTriggerConfig {
   /** One or more keywords. Match is case-insensitive by default. */
   keywords: string[];
   match_type?: "exact" | "contains";
+  /** @deprecated D5: ignored — matching never depends on case or accents. */
   case_sensitive?: boolean;
 }
 
