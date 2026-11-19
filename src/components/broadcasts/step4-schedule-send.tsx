@@ -16,12 +16,9 @@ import {
 } from '@/components/ui/dialog';
 import { ArrowLeft, Send, Loader2, Users, Save } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { estimateAudienceCount, type AudienceFilter } from '@/lib/broadcasts/audience-count';
 
-interface AudienceConfig {
-  type: string;
-  tagIds?: string[];
-  csvContacts?: { phone: string; name?: string }[];
-}
+type AudienceConfig = AudienceFilter;
 
 interface Step4Props {
   name: string;
@@ -52,36 +49,25 @@ export function Step4ScheduleSend({
   const [loadingReach, setLoadingReach] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     async function calculateReach() {
       setLoadingReach(true);
       try {
-        const supabase = createClient();
-
-        if (audience.type === 'all') {
-          const { count } = await supabase
-            .from('contacts')
-            .select('*', { count: 'exact', head: true })
-            .eq('do_not_contact', false);
-          setEstimatedReach(count ?? 0);
-        } else if (audience.type === 'tags' && audience.tagIds && audience.tagIds.length > 0) {
-          const { data: contactTags } = await supabase
-            .from('contact_tags')
-            .select('contact_id')
-            .in('tag_id', audience.tagIds);
-
-          const uniqueIds = new Set((contactTags ?? []).map((ct) => ct.contact_id));
-          setEstimatedReach(uniqueIds.size);
-        } else if (audience.type === 'csv' && audience.csvContacts) {
-          setEstimatedReach(audience.csvContacts.length);
-        } else {
-          setEstimatedReach(0);
-        }
+        // Same function as step 2, so both steps show the same number.
+        const count = await estimateAudienceCount(createClient(), audience);
+        if (!cancelled) setEstimatedReach(count ?? 0);
+      } catch (err) {
+        console.error('Failed to estimate reach:', err);
+        if (!cancelled) setEstimatedReach(0);
       } finally {
-        setLoadingReach(false);
+        if (!cancelled) setLoadingReach(false);
       }
     }
 
     calculateReach();
+    return () => {
+      cancelled = true;
+    };
   }, [audience]);
 
   const audienceLabel =
