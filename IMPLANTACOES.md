@@ -48,6 +48,17 @@ Checklist para tirar a produção da pausa (VPS + Supabase cloud). Siga na ordem
 
 ---
 
+## 2026-11-19: Reativação não espera fluxo vencido (D11 + F8)
+- **Origem:** pedido do Samuel depois do PR #2.
+- **O que mudou:** na rechecagem antes do envio (D11), um `flow_run` ativo que já passou do `on_timeout_hours` do fluxo (padrão 24 h) **não adia** o toque: é a mesma regra do F8, que já trata essa execução como abandonada quando chega mensagem nova. Se o contato tiver ao menos uma execução ainda dentro do prazo, o toque continua adiado. A execução vencida não é encerrada pela Reativação; quem encerra continua sendo o `/api/flows/cron` ou a próxima mensagem do contato (F8).
+- **Banco (migrations):** nenhuma.
+- **Arquivos principais:** `src/lib/flows/fallback.ts` (`isFlowRunStale`, regra única usada pelo F8 em `engine.ts` e pelo D11), `src/lib/reactivation/runner.ts` (`getActiveFlowRuns` no lugar de `hasActiveFlowRun`), `src/lib/reactivation/supabase-store.ts` (busca `last_advanced_at` + `flows(fallback_policy)`).
+- **Como testar:** `TZ=UTC npx vitest run src/lib/reactivation/runner.test.ts src/lib/flows/fallback.test.ts`. O teste do fluxo vencido falhou antes da correção (`deferred` = 1). Vitest 942/942, tsc e lint ok.
+- **Commit/branch:** branch `fix/d11-fluxo-vencido`, PR para o `main` (depende do PR #2).
+- **Pendências / riscos:** não testado ponta a ponta no banco local; a consulta usa o mesmo `flows(fallback_policy)` do `/api/flows/cron`.
+
+---
+
 ## 2026-11-19: API individual dispara (D12), funis em português, ficha do contato e selo Beta
 - **Origem:** pedido do Samuel na revisão do PR #2.
 - **Decisão D12:** criar UM contato pela API v1 (`POST /api/v1/contacts`) com etiquetas **dispara** `tag_added`, como mudança individual. Silenciosos (D10) continuam só a importação CSV, a ação **Etiquetar** em lote e a atribuição em lote.

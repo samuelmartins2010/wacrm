@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  decideFallback,
-  resolveFallbackPolicy,
-} from "./fallback";
+import { decideFallback, resolveFallbackPolicy, isFlowRunStale } from "./fallback";
 import { DEFAULT_FALLBACK_POLICY, type FlowFallbackPolicy } from "./types";
 
 describe("resolveFallbackPolicy", () => {
@@ -120,5 +117,25 @@ describe("decideFallback", () => {
     expect(decideFallback({ policy, reprompt_count: 1 })).toEqual({
       type: "handoff",
     });
+  });
+});
+
+describe("isFlowRunStale (F8 / D11)", () => {
+  const now = new Date("2026-11-19T12:00:00Z");
+  const hoursAgo = (h: number) => new Date(now.getTime() - h * 3_600_000).toISOString();
+
+  it("is stale from exactly on_timeout_hours on", () => {
+    expect(isFlowRunStale(hoursAgo(2), { on_timeout_hours: 2 }, now)).toBe(true);
+    expect(isFlowRunStale(hoursAgo(1.99), { on_timeout_hours: 2 }, now)).toBe(false);
+  });
+
+  it("falls back to the 24h default when the policy is missing or invalid", () => {
+    expect(isFlowRunStale(hoursAgo(23), null, now)).toBe(false);
+    expect(isFlowRunStale(hoursAgo(24), null, now)).toBe(true);
+    expect(isFlowRunStale(hoursAgo(24), { on_timeout_hours: 0 }, now)).toBe(true);
+  });
+
+  it("treats an unparseable last_advanced_at as fresh", () => {
+    expect(isFlowRunStale("not-a-date", { on_timeout_hours: 1 }, now)).toBe(false);
   });
 });

@@ -81,15 +81,21 @@ export function supabaseRunnerStore(db: SupabaseClient): RunnerStore {
       return { enrollment, contact, campaignStatus: campaign.status }
     },
 
-    async hasActiveFlowRun(contactId) {
+    async getActiveFlowRuns(contactId) {
       const { data, error } = await db
         .from('flow_runs')
-        .select('id')
+        .select('last_advanced_at, flows(fallback_policy)')
         .eq('contact_id', contactId)
         .eq('status', 'active')
-        .limit(1)
-      check(error, 'hasActiveFlowRun')
-      return (data ?? []).length > 0
+      check(error, 'getActiveFlowRuns')
+      type Row = {
+        last_advanced_at: string
+        flows: { fallback_policy: unknown } | { fallback_policy: unknown }[] | null
+      }
+      return ((data ?? []) as Row[]).map((r) => {
+        const flow = Array.isArray(r.flows) ? r.flows[0] : r.flows
+        return { last_advanced_at: r.last_advanced_at, fallback_policy: flow?.fallback_policy ?? null }
+      })
     },
 
     async getSend(enrollmentId, step) {

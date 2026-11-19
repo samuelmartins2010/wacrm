@@ -39,7 +39,7 @@ import {
   engineSendMedia,
   engineSendText,
 } from "./meta-send";
-import { decideFallback, resolveFallbackPolicy } from "./fallback";
+import { decideFallback, isFlowRunStale, resolveFallbackPolicy } from "./fallback";
 import { isValidCollectedInput } from "./collect-validation";
 import { interpolateVars } from "./vars";
 import { keywordMatches } from "@/lib/keywords";
@@ -546,11 +546,11 @@ async function expireIfStale(db: AdminClient, run: FlowRunRow): Promise<boolean>
     .select("fallback_policy")
     .eq("id", run.flow_id)
     .maybeSingle();
-  const policy = resolveFallbackPolicy(
-    (flow as { fallback_policy?: unknown } | null)?.fallback_policy,
-  );
-  const ageHours = (Date.now() - new Date(run.last_advanced_at).getTime()) / 3_600_000;
-  if (!(ageHours >= policy.on_timeout_hours)) return false;
+  const rawPolicy = (flow as { fallback_policy?: unknown } | null)?.fallback_policy;
+  const now = new Date();
+  if (!isFlowRunStale(run.last_advanced_at, rawPolicy, now)) return false;
+  const policy = resolveFallbackPolicy(rawPolicy);
+  const ageHours = (now.getTime() - new Date(run.last_advanced_at).getTime()) / 3_600_000;
   await db
     .from("flow_runs")
     .update({

@@ -13,6 +13,7 @@ import type {
   ReactivationSettings,
 } from '@/types'
 import type { engineSendTemplate } from '@/lib/automations/meta-send'
+import { isFlowRunStale } from '@/lib/flows/fallback'
 import {
   addDays,
   classifySendError,
@@ -37,6 +38,11 @@ export interface DueItem {
   enrollment: ReactivationEnrollment
   campaign: ReactivationCampaign
   contact: RunnerContact
+}
+
+export interface ActiveFlowRun {
+  last_advanced_at: string
+  fallback_policy: unknown
 }
 
 export interface RunnerStore {
@@ -65,8 +71,8 @@ export interface RunnerStore {
   ): Promise<ReactivationSend | null>
   updateSend(id: string, patch: Partial<ReactivationSend>): Promise<void>
   latestConversationId(contactId: string): Promise<string | null>
-  /** D11: is the contact inside an active flow run right now? */
-  hasActiveFlowRun(contactId: string): Promise<boolean>
+  /** D11: the contact's active flow runs (age + the flow's fallback policy). */
+  getActiveFlowRuns(contactId: string): Promise<ActiveFlowRun[]>
   getTemplate(id: string): Promise<MessageTemplate | null>
   /** Dry run: persist a bot message without calling Meta. Returns messages.id. */
   insertDryRunMessage(conversationId: string, templateName: string, wamid: string): Promise<string | null>
@@ -214,8 +220,11 @@ async function runLocked(deps: RunnerDeps, now: Date): Promise<RunResult> {
 
     // D11: never interrupt a flow conversation — while the contact has an
     // active flow run, the touch waits for the next round (the window
-    // check then holds it until the window opens again).
-    if (await store.hasActiveFlowRun(contact.id)) {
+    // check then holds it until the window opens again). A run already
+    // past its flow's on_timeout_hours is abandoned (same rule as F8):
+    // it does not hold the touch.
+    const flowRuns = await store.getActiveFlowRuns(contact.id)
+    if (flowRuns.some((r) => !isFlowRunStale(r.last_advanced_at, r.fallback_policy, now))) {
       await store.updateEnrollment(e.id, { next_run_at: nowIso, updated_at: nowIso }, true)
       result.deferred++
       continue
