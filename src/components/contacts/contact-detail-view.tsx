@@ -368,8 +368,8 @@ export function ContactDetailView({
 
       toast.success(t('toastTemplateSent', { name: template.name }));
     } catch (err) {
-      const reason = err instanceof Error ? err.message : 'network error';
-      toast.error(`Failed to send template: ${reason}`);
+      const reason = err instanceof Error ? err.message : t('networkError');
+      toast.error(t('toastTemplateFailed', { reason }));
     } finally {
       setSendingTemplate(false);
     }
@@ -399,7 +399,7 @@ export function ContactDetailView({
         ) : (
           <div className="flex flex-col h-full">
             {/* Header */}
-            <SheetHeader className="p-4 border-b border-border/50">
+            <SheetHeader className="p-4 pr-12 border-b border-border/50">
               <div className="flex items-center gap-3">
                 <Avatar className="size-12 bg-muted border border-border">
                   <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
@@ -407,13 +407,16 @@ export function ContactDetailView({
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <SheetTitle className="text-popover-foreground truncate">
+                  <SheetTitle
+                    className="text-popover-foreground truncate"
+                    title={contact.name || undefined}
+                  >
                     {contact.name || t('unnamed')}
                   </SheetTitle>
                   <SheetDescription className="text-muted-foreground text-xs mt-0.5">
                     {t('contactDetailsDesc')}
                   </SheetDescription>
-                  <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs text-muted-foreground min-w-0">
                     <button
                       onClick={copyPhone}
                       className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer"
@@ -427,15 +430,15 @@ export function ContactDetailView({
                       )}
                     </button>
                     {contact.email && (
-                      <span className="flex items-center gap-1">
-                        <Mail className="size-3" />
-                        {contact.email}
+                      <span className="flex min-w-0 max-w-full items-center gap-1" title={contact.email}>
+                        <Mail className="size-3 shrink-0" />
+                        <span className="truncate">{contact.email}</span>
                       </span>
                     )}
                     {contact.company && (
-                      <span className="flex items-center gap-1">
-                        <Building2 className="size-3" />
-                        {contact.company}
+                      <span className="flex min-w-0 max-w-full items-center gap-1" title={contact.company}>
+                        <Building2 className="size-3 shrink-0" />
+                        <span className="truncate">{contact.company}</span>
                       </span>
                     )}
                   </div>
@@ -461,34 +464,34 @@ export function ContactDetailView({
 
             {/* Tabs */}
             <Tabs defaultValue="details" className="flex-1 flex flex-col min-h-0">
-              <TabsList className="bg-muted/50 border-b border-border mx-4 mt-3">
+              <TabsList className="bg-muted/50 border-b border-border mx-4 mt-3 w-auto flex-wrap justify-start gap-1 group-data-horizontal/tabs:h-auto">
                 <TabsTrigger
                   value="details"
-                  className="data-active:bg-muted data-active:text-primary text-muted-foreground"
+                  className="flex-none px-2.5 data-active:bg-muted data-active:text-primary text-muted-foreground"
                 >
                   {t('tabs.details')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="tags"
-                  className="data-active:bg-muted data-active:text-primary text-muted-foreground"
+                  className="flex-none px-2.5 data-active:bg-muted data-active:text-primary text-muted-foreground"
                 >
-                  {t('tabs.tags', { fallback: 'Tags' })}
+                  {t('tabs.tags')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="notes"
-                  className="data-active:bg-muted data-active:text-primary text-muted-foreground"
+                  className="flex-none px-2.5 data-active:bg-muted data-active:text-primary text-muted-foreground"
                 >
                   {t('tabs.notes')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="custom"
-                  className="data-active:bg-muted data-active:text-primary text-muted-foreground"
+                  className="flex-none px-2.5 data-active:bg-muted data-active:text-primary text-muted-foreground"
                 >
                   {t('tabs.custom')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="deals"
-                  className="data-active:bg-muted data-active:text-primary text-muted-foreground"
+                  className="flex-none px-2.5 data-active:bg-muted data-active:text-primary text-muted-foreground"
                 >
                   {t('tabs.deals')}
                 </TabsTrigger>
@@ -498,9 +501,10 @@ export function ContactDetailView({
               <TabsContent value="details" className="flex-1 overflow-y-auto px-4 py-3">
                 <div className="space-y-3">
                   <div className="space-y-1.5">
-                    <Label className="text-muted-foreground text-xs">{t('company', { fallback: 'Name' })}</Label>
+                    <Label className="text-muted-foreground text-xs">{t('name')}</Label>
                     <Input
                       value={editName}
+                      title={editName}
                       onChange={(e) => setEditName(e.target.value)}
                       className="bg-muted border-border text-foreground h-8 text-sm"
                     />
@@ -519,6 +523,7 @@ export function ContactDetailView({
                     <Label className="text-muted-foreground text-xs">{t('email')}</Label>
                     <Input
                       value={editEmail}
+                      title={editEmail}
                       onChange={(e) => setEditEmail(e.target.value)}
                       className="bg-muted border-border text-foreground h-8 text-sm"
                     />
@@ -527,6 +532,7 @@ export function ContactDetailView({
                     <Label className="text-muted-foreground text-xs">{t('company')}</Label>
                     <Input
                       value={editCompany}
+                      title={editCompany}
                       onChange={(e) => setEditCompany(e.target.value)}
                       className="bg-muted border-border text-foreground h-8 text-sm"
                     />

@@ -388,7 +388,8 @@
         "deals": "Negócios",
         "noTags": "Nenhuma etiqueta",
         "noDeals": "Nenhum negócio",
-        "addNotePlaceholder": "Adicionar uma nota..."
+        "addNotePlaceholder": "Adicionar uma nota...",
+        "tags": "Etiquetas"
       },
       "actions": {
         "edit": "Editar",
@@ -437,7 +438,9 @@
       "toastCustomFieldsSaved": "Campos personalizados salvos",
       "toastCustomFieldsFailed": "Falha ao salvar campos personalizados",
       "toastTemplateSent": "Modelo \"{name}\" enviado",
-      "toastTemplateFailed": "Falha ao enviar modelo: {reason}"
+      "toastTemplateFailed": "Falha ao enviar modelo: {reason}",
+      "name": "Nome",
+      "networkError": "erro de rede"
     },
     "importModal": {
       "title": "Importar contatos",
