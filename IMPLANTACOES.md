@@ -18,6 +18,36 @@ Modelo de entrada:
 
 ---
 
+## Para religar a VPS
+
+Checklist para tirar a produção da pausa (VPS + Supabase cloud). Siga na ordem; cada item diz onde conferir.
+
+1. **Migrations 040–056 antes de subir o código.**
+   - Rodar no SQL Editor do Supabase cloud (projeto `crm`), **uma por vez e na ordem** do `docs/deploy-migrations-040-055.md` (o guia cobre 040–056), com o cron pausado.
+   - **Onde conferir:** depois de cada migration, rodar a consulta de verificação da tabela do guia; ela tem que voltar `true`. Se alguma falhar, seguir o "plano se falhar" do guia e **não** subir o código novo.
+   - Só depois de a 056 passar, subir o código do `main` na VPS.
+
+2. **Pinger chamando os 3 crons a cada 5 min**, todos com o header `x-cron-secret: <AUTOMATION_CRON_SECRET>`:
+   - `/api/automations/cron`. Se faltar, as automações paradas num passo **Aguardar** nunca continuam, e eventos de `tag_added`/`conversation_assigned` que não foram tratados na hora (rede de segurança do D3) nunca disparam.
+   - `/api/flows/cron`. Se faltar, quem abandona um fluxo no meio fica com uma execução `active` para sempre. Ela só se encerra quando o contato manda outra mensagem (F8), e até lá bloqueia novos gatilhos de fluxo para esse contato e faz a Reativação adiar os toques dele (D11).
+   - `/api/reactivation/cron`. Se faltar, **nenhum toque da Reativação é enviado**: as campanhas ficam paradas com inscrições pendentes e as sem inscrições abertas não são encerradas.
+   - **Onde conferir:** `curl -i -H "x-cron-secret: …" https://clientizza.com/api/<rota>/cron` responde 200 para as três (sem o header, 401); no painel do pinger, as três chamadas aparecem a cada 5 min com status 200.
+
+3. **Webhook da Meta apontando para a VPS.**
+   - Em Meta for Developers → app do WhatsApp → **WhatsApp → Configuração** → Webhook: URL de retorno `https://clientizza.com/api/whatsapp/webhook` e o **Token de verificação** igual ao salvo no Clientizza (Configurações → WhatsApp → "Token de verificação do webhook"). Assinar o campo `messages`.
+   - `META_APP_SECRET` precisa estar no env da VPS (Meta → Configurações do app → Básico → Chave secreta do app); sem ele o webhook recusa toda mensagem.
+   - `REACTIVATION_DRY_RUN` **não** pode estar ligado em produção (nem `WHATSAPP_TEMPLATES_DRY_RUN`): conferir no env da VPS que não existem ou não valem `true`. Com eles ligados, nada sai para a Meta e o sistema finge que enviou.
+   - **Onde conferir:** o botão "Verificar e salvar" da Meta aceita a URL; mandar "oi" de um número próprio e a mensagem aparece no inbox.
+
+4. **Teste da Reativação com WhatsApp real.** Uma campanha com 2–3 números próprios, com o template `volta_cliente` aprovado:
+   - **Envio:** o toque chega no WhatsApp e aparece no inbox como mensagem automática.
+   - **Resposta:** um número responde "oi" e a inscrição vira respondida, sem novo toque.
+   - **SAIR:** um número manda "SAIR" e recebe **só** a confirmação (sem automação nem I.A); o contato fica com "não contatar".
+   - **Número sem WhatsApp:** incluir um número que não tem WhatsApp; o envio falha com o código da Meta (131026) gravado e a inscrição fica `failed`, sem retentativa.
+   - **Onde conferir:** tela Reativação → relatório da campanha (enviados, respostas, saídas, falhas) e a ficha de cada contato (selo de não contatar).
+
+---
+
 ## 2026-11-19: API individual dispara (D12), funis em português, ficha do contato e selo Beta
 - **Origem:** pedido do Samuel na revisão do PR #2.
 - **Decisão D12:** criar UM contato pela API v1 (`POST /api/v1/contacts`) com etiquetas **dispara** `tag_added`, como mudança individual. Silenciosos (D10) continuam só a importação CSV, a ação **Etiquetar** em lote e a atribuição em lote.
