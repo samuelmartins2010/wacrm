@@ -43,7 +43,6 @@
     "flows": "Fluxos",
     "aiAgents": "Agentes de IA",
     "settings": "Configurações",
-    "beta": "Beta",
     "unreadConversations": "{count} {count, plural, =1 {conversa não lida} other {conversas não lidas}}",
     "unreadNotifications": "{count} {count, plural, =1 {notificação não lida} other {notificações não lidas}}",
     "roleOwner": "Proprietário",
@@ -1055,7 +1054,6 @@
   "Flows": {
     "list": {
       "title": "Fluxos",
-      "beta": "Beta",
       "description": "Crie conversas ramificadas por botões no WhatsApp. Útil para menus, perguntas frequentes e triagem antes de um humano assumir.",
       "newFlow": "Novo fluxo",
       "statusDraft": "Rascunho",

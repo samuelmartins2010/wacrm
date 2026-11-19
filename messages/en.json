@@ -43,7 +43,6 @@
     "flows": "Flows",
     "aiAgents": "AI Agents",
     "settings": "Settings",
-    "beta": "Beta",
     "unreadConversations": "{count} unread {count, plural, =1 {conversation} other {conversations}}",
     "unreadNotifications": "{count} unread {count, plural, =1 {notification} other {notifications}}",
     "roleOwner": "Owner",
@@ -1055,7 +1054,6 @@
   "Flows": {
     "list": {
       "title": "Flows",
-      "beta": "Beta",
       "description": "Build branching, button-driven WhatsApp conversations. Useful for menus, FAQs, and triage before a human steps in.",
       "newFlow": "New flow",
       "statusDraft": "Draft",
