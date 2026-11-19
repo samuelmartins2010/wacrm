@@ -54,8 +54,9 @@ Checklist para tirar a produção da pausa (VPS + Supabase cloud). Siga na ordem
 - **Banco (migrations):** nenhuma.
 - **Arquivos principais:** `src/lib/flows/fallback.ts` (`isFlowRunStale`, regra única usada pelo F8 em `engine.ts` e pelo D11), `src/lib/reactivation/runner.ts` (`getActiveFlowRuns` no lugar de `hasActiveFlowRun`), `src/lib/reactivation/supabase-store.ts` (busca `last_advanced_at` + `flows(fallback_policy)`).
 - **Como testar:** `TZ=UTC npx vitest run src/lib/reactivation/runner.test.ts src/lib/flows/fallback.test.ts`. O teste do fluxo vencido falhou antes da correção (`deferred` = 1). Vitest 942/942, tsc e lint ok.
-- **Commit/branch:** branch `fix/d11-fluxo-vencido`, PR para o `main` (depende do PR #2).
-- **Pendências / riscos:** não testado ponta a ponta no banco local; a consulta usa o mesmo `flows(fallback_policy)` do `/api/flows/cron`.
+- **Commit/branch:** PR #3 (`fix/d11-fluxo-vencido`), mergeado em 19/11/2026 (merge `c904aa6`).
+- **Teste no banco local (19/11/2026, `main` c904aa6, dev com `REACTIVATION_DRY_RUN=true` e saída externa bloqueada):** fluxo com `on_timeout_hours` = 2; Ana com execução parada há 3 h e Carla (controle) parada há 5 min, as duas com toque devido. `GET /api/reactivation/cron` → `{sent:1, deferred:1}`: o toque da Ana saiu (envio `sent`, mensagem `bot` no inbox, inscrição `completed`) e o da Carla ficou adiado para a rodada seguinte. A execução vencida da Ana continuou `active`, como previsto. Dados do teste apagados e `last_message_at`/`updated_at` da conversa da Ana restaurados do backup de 18/11; banco de volta à base (4 contatos / 4 conversas / 7 mensagens).
+- **Pendências / riscos:** nenhuma específica.
 
 ---
 
