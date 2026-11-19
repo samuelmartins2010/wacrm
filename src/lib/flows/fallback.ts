@@ -89,3 +89,19 @@ export function decideFallback(args: {
     ? { type: "end" }
     : { type: "handoff" };
 }
+
+/**
+ * F8 / D11: is an active run past its flow's `on_timeout_hours`? Such a
+ * run would already have been swept by `/api/flows/cron`, so callers
+ * treat it as finished. An unparseable `last_advanced_at` counts as
+ * fresh (never expire on bad data).
+ */
+export function isFlowRunStale(
+  lastAdvancedAt: string,
+  rawPolicy: unknown,
+  now: Date,
+): boolean {
+  const policy = resolveFallbackPolicy(rawPolicy);
+  const ageHours = (now.getTime() - new Date(lastAdvancedAt).getTime()) / 3_600_000;
+  return ageHours >= policy.on_timeout_hours;
+}

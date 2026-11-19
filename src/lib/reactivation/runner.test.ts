@@ -136,10 +136,10 @@ class MemStore implements RunnerStore {
       campaignStatus: this.campaigns.get(e.campaign_id)!.status,
     }
   }
-  /** D11: contacts currently inside an active flow run. */
-  activeFlowContacts = new Set<string>()
-  async hasActiveFlowRun(contactId: string) {
-    return this.activeFlowContacts.has(contactId)
+  /** D11: active flow runs per contact (age + the flow's fallback policy). */
+  activeFlowRuns = new Map<string, { last_advanced_at: string; fallback_policy: unknown }[]>()
+  async getActiveFlowRuns(contactId: string) {
+    return this.activeFlowRuns.get(contactId) ?? []
   }
   async getSend(enrollmentId: string, step: number) {
     return this.sends.find((s) => s.enrollment_id === enrollmentId && s.step === step) ?? null
@@ -423,7 +423,9 @@ describe('runReactivation', () => {
   it('D11: postpones the touch while the contact is inside an active flow, sends it once the flow ends', async () => {
     const { store, send, deps } = setup()
     store.addEnrollment('e1')
-    store.activeFlowContacts.add('c-e1')
+    store.activeFlowRuns.set('c-e1', [
+      { last_advanced_at: new Date(NOW.getTime() - 60_000).toISOString(), fallback_policy: null },
+    ])
     const r1 = await runReactivation(deps, NOW)
     expect(send).not.toHaveBeenCalled()
     expect(r1.deferred).toBe(1)
@@ -432,12 +434,53 @@ describe('runReactivation', () => {
     // due again on the next round, not pushed days away
     expect(new Date(store.enrollments.get('e1')!.next_run_at!).getTime()).toBeLessThanOrEqual(NOW.getTime())
 
-    store.activeFlowContacts.delete('c-e1') // flow finished
+    store.activeFlowRuns.delete('c-e1') // flow finished
     const later = new Date(NOW.getTime() + 10 * 60_000)
     const r2 = await runReactivation(deps, later)
     expect(r2.sent).toBe(1)
     expect(send).toHaveBeenCalledTimes(1)
     expect(store.enrollments.get('e1')!.current_step).toBe(1)
+  })
+
+  it('D11 + F8: an active flow run past its on_timeout_hours does not postpone the touch', async () => {
+    const { store, send, deps } = setup()
+    store.addEnrollment('e1')
+    // last advanced 3h ago in a flow that times out after 2h: already stale
+    store.activeFlowRuns.set('c-e1', [
+      {
+        last_advanced_at: new Date(NOW.getTime() - 3 * 3_600_000).toISOString(),
+        fallback_policy: { on_timeout_hours: 2 },
+      },
+    ])
+    const r = await runReactivation(deps, NOW)
+    expect(r.deferred).toBe(0)
+    expect(r.sent).toBe(1)
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(store.enrollments.get('e1')!.current_step).toBe(1)
+  })
+
+  it('D11: a run still inside its on_timeout_hours keeps postponing (default policy = 24h)', async () => {
+    const { store, send, deps } = setup()
+    store.addEnrollment('e1')
+    store.activeFlowRuns.set('c-e1', [
+      // stale under a 2h policy but not under the 24h default
+      { last_advanced_at: new Date(NOW.getTime() - 3 * 3_600_000).toISOString(), fallback_policy: null },
+    ])
+    const r = await runReactivation(deps, NOW)
+    expect(r.deferred).toBe(1)
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('D11: one fresh run among stale ones still postpones', async () => {
+    const { store, send, deps } = setup()
+    store.addEnrollment('e1')
+    store.activeFlowRuns.set('c-e1', [
+      { last_advanced_at: new Date(NOW.getTime() - 48 * 3_600_000).toISOString(), fallback_policy: null },
+      { last_advanced_at: new Date(NOW.getTime() - 60_000).toISOString(), fallback_policy: null },
+    ])
+    const r = await runReactivation(deps, NOW)
+    expect(r.deferred).toBe(1)
+    expect(send).not.toHaveBeenCalled()
   })
 
   it('does not overwrite a reply that arrives during the send', async () => {
