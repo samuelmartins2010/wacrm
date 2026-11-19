@@ -197,6 +197,21 @@ export interface Conversation {
   ai_handoff_summary?: string | null;
 }
 
+/** Nota interna ou troca de responsável na linha do tempo (migration 058). */
+export interface ConversationEvent {
+  id: string;
+  account_id: string;
+  conversation_id: string;
+  type: 'note' | 'assigned' | 'transferred' | 'unassigned';
+  actor_kind: 'user' | 'automation' | 'flow' | 'ai';
+  actor_user_id: string | null;
+  from_user_id: string | null;
+  to_user_id: string | null;
+  body: string | null;
+  note_id: string | null;
+  created_at: string;
+}
+
 // ============================================================
 // Notifications (migration 027)
 // ============================================================
