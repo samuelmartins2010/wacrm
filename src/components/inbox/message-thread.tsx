@@ -220,7 +220,8 @@ export function MessageThread({
           console.error("Failed to fetch profiles:", error);
           return;
         }
-        setProfiles((data as Profile[]) ?? []);
+        // 059: só visualizar não pode ser responsável (o banco recusa).
+        setProfiles(((data as Profile[]) ?? []).filter((p) => p.account_role !== "viewer"));
       });
     return () => {
       cancelled = true;
