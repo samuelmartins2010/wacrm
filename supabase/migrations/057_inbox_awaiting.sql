@@ -163,8 +163,9 @@ CREATE TRIGGER conversations_awaiting_on_status
 -- ── Backfill das conversas que já existem ───────────────────────────
 -- Encerradas: sem espera; closed_at aproximado pela última alteração.
 UPDATE conversations
-   SET closed_at = coalesce(closed_at, updated_at, now())
- WHERE status = 'closed' AND closed_at IS NULL;
+   SET closed_at = coalesce(closed_at, updated_at, now()),
+       awaiting_since = NULL
+ WHERE status = 'closed' AND (closed_at IS NULL OR awaiting_since IS NOT NULL);
 
 WITH last_human AS (
   SELECT conversation_id, max(created_at) AS at
