@@ -173,14 +173,16 @@
 **Files:**
 - Modify: `src/lib/flows/engine.ts` (`handOffRun`, ~linha 432)
 - Modify: `src/lib/ai/auto-reply.ts` (bloco de entrega para humano, ~linha 145)
-- Test: `src/lib/flows/engine.test.ts`, `src/lib/ai/auto-reply.test.ts` (acrescentar casos)
+- Modify: `src/app/api/ai/autoreply/[conversationId]/route.ts` ("Assumir" / "Retomar I.A" do banner; ajuste D do Samuel, 20/11)
+- Test: `src/lib/flows/engine.test.ts`, `src/lib/ai/auto-reply.test.ts`, teste da rota do banner (acrescentar casos)
 
 **Interfaces:**
 - Consumes: `record_assignment_event` (tarefa 2).
 
 - [ ] **Step 1: Escrever os testes**:
   - fluxo: `handOffRun` com `assignTo` chama `db.rpc('record_assignment_event', { p_conversation_id, p_to_user_id: assignTo, p_actor_kind: 'flow', p_actor_user_id: null, p_note: null })` e o `update` de `conversations` **não** leva mais `assigned_agent_id`; sem `assignTo`, não chama a RPC;
-  - I.A: na entrega com `handoffAgentId` e sem responsável, chama a RPC com `p_actor_kind: 'ai'` e `p_note` = o `summary` de `buildHandoffSummary`; o `update` não leva `assigned_agent_id`.
+  - I.A: na entrega com `handoffAgentId` e sem responsável, chama a RPC com `p_actor_kind: 'ai'` e `p_note` = o `summary` de `buildHandoffSummary`; o `update` não leva `assigned_agent_id`;
+  - banner da I.A: "Assumir" (`paused: true, assign_to_me: true`) chama `rpc('transfer_conversation', { p_conversation_id, p_to_user_id: userId, p_note: null })` com o cliente do usuário (evento `actor_kind = 'agent'`); "Retomar I.A" que remove o responsável chama a mesma RPC com `p_to_user_id: null`; o `update` não leva mais `assigned_agent_id`; erro da RPC responde 4xx/5xx e não muda a pausa da I.A.
 - [ ] **Step 2: Rodar e ver falhar** · `TZ=UTC LC_ALL=en_US.UTF-8 npx vitest run src/lib/flows/engine.test.ts src/lib/ai/auto-reply.test.ts` · Expected: FAIL nos casos novos.
 - [ ] **Step 3: Implementar**: tirar `assigned_agent_id` dos `update` e chamar a RPC logo depois (o `update` dos outros campos continua igual). Erro da RPC é logado e não derruba o handoff (mesmo padrão de best-effort do arquivo).
 - [ ] **Step 4: Rodar** os mesmos testes · Expected: PASS.
@@ -238,6 +240,14 @@
 - [ ] **Step 3: Implementar** `transfer.ts`; o menu: escolher membro abre o diálogo (spec 5.4, contador de caracteres até 2.000); "Remover responsável" chama `transferConversation(..., null, '')` sem diálogo; erro mostra toast traduzido. O `update` direto de `assigned_agent_id` sai de `message-thread.tsx`.
 - [ ] **Step 4: Verificar** · `npx vitest run`, `npm run typecheck`, `npm run lint`, `npm run i18n:check`; `grep -rn "assigned_agent_id:" src/components` não acha gravação direta · Expected: passa, grep vazio.
 - [ ] **Step 5: Commit** `feat(inbox): transferir conversa com observação`
+
+### Task 8b: Trava "troca de responsável só com evento" (migration 060)
+
+Ajuste E do Samuel (20/11): depois da tarefa 8, quando nenhuma tela grava `assigned_agent_id` direto.
+
+- Create: `supabase/migrations/060_conversation_assignee_event_only.sql` — trigger em `conversations` que recusa mudar `assigned_agent_id` fora de `_assign_with_event` (marca de transação lida pelo trigger, como o `app.assignment_event_id`).
+- Test: `supabase/tests/assignee_event_only.test.sql` — UPDATE direto (logado e service_role) é recusado; transferência, automação, fluxo/I.A e em massa continuam funcionando e gravando evento.
+- Antes: `grep -rn "assigned_agent_id" src` sem gravação direta fora das RPCs.
 
 ### Task 9: Teste ponta a ponta local, registro e PR
 
