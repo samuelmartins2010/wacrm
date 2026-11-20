@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ACCOUNT_ROLES,
+  canBeAssigned,
   type AccountRole,
   canDeleteAccount,
   canEditSettings,
@@ -126,5 +127,14 @@ describe("capability predicates", () => {
     expect(canTransferOwnership("admin")).toBe(false);
     expect(canTransferOwnership("agent")).toBe(false);
     expect(canTransferOwnership("viewer")).toBe(false);
+  });
+});
+
+describe("canBeAssigned (059)", () => {
+  it("owner, admin and agent can own a conversation; viewer cannot", () => {
+    expect(canBeAssigned("owner")).toBe(true);
+    expect(canBeAssigned("admin")).toBe(true);
+    expect(canBeAssigned("agent")).toBe(true);
+    expect(canBeAssigned("viewer")).toBe(false);
   });
 });

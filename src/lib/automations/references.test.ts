@@ -4,7 +4,8 @@ import { validateStepReferences, type AccountRefs } from "./references";
 const refs: AccountRefs = {
   tagIds: new Set(["tag-ok"]),
   stagesByPipeline: new Map([["p-ok", new Set(["s-ok"])]]),
-  memberIds: new Set(["agent-ok"]),
+  memberIds: new Set(["agent-ok", "viewer-1"]),
+  viewerIds: new Set(["viewer-1"]),
   customFieldIds: new Set(["cf-ok"]),
 };
 const s = (step_type: string, step_config: Record<string, unknown>) => ({ step_type, step_config });
@@ -47,6 +48,16 @@ describe("validateStepReferences (A6, at save)", () => {
       "steps[3].pipeline_id",
       "steps[4].field",
       "steps[5].field",
+    ]);
+  });
+
+  it("refuses a view-only member as the assignee (059), with a clear message", () => {
+    const issues = validateStepReferences(
+      [s("assign_conversation", { mode: "specific", agent_id: "viewer-1" })],
+      refs,
+    );
+    expect(issues).toEqual([
+      { path: "steps[0].agent_id", message: "agent has a view-only role in this account" },
     ]);
   });
 

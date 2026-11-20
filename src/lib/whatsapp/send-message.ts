@@ -84,6 +84,12 @@ export interface SendMessageParams {
   /** Structured payload for `messageType === 'interactive'`. */
   interactivePayload?: InteractiveMessagePayload | null;
   replyToMessageId?: string | null;
+  /**
+   * Enviada pela API pública v1. Conta como robô no Inbox: grava
+   * `messages.sent_via_api = true` e não zera a espera do cliente
+   * (migration 057). O Inbox não passa este campo.
+   */
+  sentViaApi?: boolean;
 }
 
 export interface SendMessageResult {
@@ -462,6 +468,7 @@ export async function sendMessageToConversation(
       message_id: waMessageId,
       status: 'sent',
       reply_to_message_id: replyToMessageId || null,
+      sent_via_api: params.sentViaApi === true,
     })
     .select()
     .single();

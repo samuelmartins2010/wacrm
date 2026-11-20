@@ -61,6 +61,7 @@ import {
   blankListPayload,
 } from "@/components/interactive/interactive-builder"
 import { interactivePayloadPreviewText } from "@/lib/whatsapp/interactive"
+import { assignableMembers } from "@/lib/account/members"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 
@@ -289,7 +290,7 @@ function ResourcesProvider({ children }: { children: ReactNode }) {
         const res = await fetch("/api/account/members", { cache: "no-store" })
         if (!res.ok) return
         const json = (await res.json()) as { members?: AccountMember[] }
-        if (!cancelled) setMembers(json.members ?? [])
+        if (!cancelled) setMembers(assignableMembers(json.members ?? []))
       } catch {
         // Members endpoint absent — caller falls back to raw input.
       }

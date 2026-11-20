@@ -12,6 +12,8 @@ export interface AccountRefs {
   tagIds: Set<string>
   stagesByPipeline: Map<string, Set<string>>
   memberIds: Set<string>
+  /** Members with a view-only role: can't be assignees (migration 059). */
+  viewerIds: Set<string>
   customFieldIds: Set<string>
 }
 
@@ -41,6 +43,8 @@ export function validateStepReferences(steps: StepLike[], refs: AccountRefs): Va
           const id = str(c.agent_id)
           if (c.mode !== 'round_robin' && id && !refs.memberIds.has(id)) {
             issues.push({ path: `${path}.agent_id`, message: 'agent is not a member of this account' })
+          } else if (c.mode !== 'round_robin' && id && refs.viewerIds.has(id)) {
+            issues.push({ path: `${path}.agent_id`, message: 'agent has a view-only role in this account' })
           }
           break
         }
@@ -78,7 +82,7 @@ export async function loadAccountRefs(db: SupabaseClient, accountId: string): Pr
   const [tags, pipelines, members, fields] = await Promise.all([
     db.from('tags').select('id').eq('account_id', accountId),
     db.from('pipelines').select('id').eq('account_id', accountId),
-    db.from('profiles').select('user_id').eq('account_id', accountId),
+    db.from('profiles').select('user_id, account_role').eq('account_id', accountId),
     db.from('custom_fields').select('id').eq('account_id', accountId),
   ])
   const pipelineIds = ((pipelines.data ?? []) as { id: string }[]).map((p) => p.id)
@@ -91,6 +95,11 @@ export async function loadAccountRefs(db: SupabaseClient, accountId: string): Pr
     tagIds: new Set(((tags.data ?? []) as { id: string }[]).map((t) => t.id)),
     stagesByPipeline,
     memberIds: new Set(((members.data ?? []) as { user_id: string }[]).map((m) => m.user_id)),
+    viewerIds: new Set(
+      ((members.data ?? []) as { user_id: string; account_role: string }[])
+        .filter((m) => m.account_role === 'viewer')
+        .map((m) => m.user_id),
+    ),
     customFieldIds: new Set(((fields.data ?? []) as { id: string }[]).map((f) => f.id)),
   }
 }
