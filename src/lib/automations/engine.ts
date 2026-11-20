@@ -665,16 +665,24 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
           .from('profiles')
           .select('user_id')
           .eq('account_id', args.automation.account_id)
+          .neq('account_role', 'viewer') // 059: viewers can't own conversations
           .limit(1)
         agentId = profiles?.[0]?.user_id
       }
       if (!agentId) throw new Error('assign_conversation: no agent resolved')
       // A6: only a member of this account can be assigned.
-      await requireRow(
-        'profiles',
-        { user_id: agentId, account_id: args.automation.account_id },
-        'assign_conversation: agent is not a member of this account',
-      )
+      // 059: and not a view-only member (the database refuses it too).
+      const { data: member, error: memberErr } = await db
+        .from('profiles')
+        .select('account_role')
+        .eq('user_id', agentId)
+        .eq('account_id', args.automation.account_id)
+        .maybeSingle()
+      if (memberErr) throw new Error(`assign_conversation: could not check the agent (${memberErr.message})`)
+      if (!member) throw new Error('assign_conversation: agent is not a member of this account')
+      if (member.account_role === 'viewer') {
+        throw new Error('assign_conversation: agent has a view-only role in this account')
+      }
       // Through the RPC so the conversation_assigned event carries depth (A7).
       const { data: assigned, error: assignErr } = await db.rpc('automation_assign_conversation', {
         p_account_id: args.automation.account_id,

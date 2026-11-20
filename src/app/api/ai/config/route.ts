@@ -106,11 +106,15 @@ export async function POST(request: Request) {
     if (rawHandoff) {
       const { data: member } = await supabase
         .from('profiles')
-        .select('user_id')
+        .select('user_id, account_role')
         .eq('account_id', accountId)
         .eq('user_id', rawHandoff)
         .maybeSingle()
       if (!member) return bad('handoff_agent_id must be a member of this account')
+      // 059: a view-only member can't own conversations.
+      if (member.account_role === 'viewer') {
+        return bad('handoff_agent_id has a view-only role in this account')
+      }
       handoffAgentId = rawHandoff
     }
 

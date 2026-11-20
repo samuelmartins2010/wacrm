@@ -29,7 +29,7 @@ import { AiKnowledgeCard } from './ai-knowledge';
 import { AI_PROVIDER_DEFAULT_MODEL } from '@/lib/ai/defaults';
 import type { AiProvider } from '@/lib/ai/types';
 import type { AccountMember } from '@/types';
-import { fetchAccountMembers, memberLabel } from '@/lib/account/members';
+import { assignableMembers, fetchAccountMembers, memberLabel } from '@/lib/account/members';
 import { useTranslations } from 'next-intl';
 
 const MASKED_KEY = '••••••••••••••••';
@@ -121,7 +121,7 @@ export function AiConfig() {
     // Members populate the handoff-target picker. Best-effort — on an
     // older deployment without the endpoint the picker just shows the
     // queue option.
-    void fetchAccountMembers().then(setMembers);
+    void fetchAccountMembers().then((all) => setMembers(assignableMembers(all)));
   }, [accountId, fetchConfig]);
 
   // Swap the model default when the provider changes, unless the user
