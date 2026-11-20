@@ -2,7 +2,7 @@
 -- Só a resposta de um atendente humano zera a espera: robô, I.A, fluxo e
 -- mensagem pela API v1 não zeram; resposta que falhou também não.
 begin;
-select plan(15);
+select plan(19);
 
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000a1', 'aguardando@test.local');
 insert into contacts (id, user_id, account_id, phone, name)
@@ -13,10 +13,13 @@ insert into conversations (id, user_id, account_id, contact_id, status)
 select '00000000-0000-0000-0000-00000000a001', user_id, account_id, id, 'open'
   from contacts where id = '00000000-0000-0000-0000-00000000a0c1';
 -- B: encerrada (não conta nos filtros, mas conta em "Não lidas")
--- C: encerrada (cenário misto do recompute)
 insert into conversations (id, user_id, account_id, contact_id, status)
-select v.id::uuid, c.user_id, c.account_id, c.id, 'closed'
-  from contacts c, (values ('00000000-0000-0000-0000-00000000a002'), ('00000000-0000-0000-0000-00000000a003')) v(id)
+select '00000000-0000-0000-0000-00000000a002', user_id, account_id, id, 'closed'
+  from contacts where id = '00000000-0000-0000-0000-00000000a0c1';
+-- C: aberta (cenário misto do recompute); D: aberta (encerrar e reabrir)
+insert into conversations (id, user_id, account_id, contact_id, status)
+select v.id::uuid, c.user_id, c.account_id, c.id, 'open'
+  from contacts c, (values ('00000000-0000-0000-0000-00000000a003'), ('00000000-0000-0000-0000-00000000a004')) v(id)
  where c.id = '00000000-0000-0000-0000-00000000a0c1';
 
 create function pg_temp.wait(conv uuid) returns timestamptz language sql as $$
@@ -81,7 +84,30 @@ select is((select v from via_trigger), '2026-11-19 08:05+00'::timestamptz,
 -- B encerrada, aguardando e com não lidas
 select pg_temp.msg('00000000-0000-0000-0000-00000000a002', 'customer', '2026-11-19 09:00+00');
 update conversations set unread_count = 2 where id = '00000000-0000-0000-0000-00000000a002';
-select isnt(pg_temp.wait('00000000-0000-0000-0000-00000000a002'), null, 'conversa encerrada também guarda a espera');
+select is(pg_temp.wait('00000000-0000-0000-0000-00000000a002'), null,
+  'cliente escreve em conversa encerrada: a espera não começa');
+
+-- Encerrar zera a espera; reabrir recomeça só com o que o cliente
+-- escreveu depois do encerramento. A está aguardando desde 11:00.
+update conversations set status = 'closed' where id = '00000000-0000-0000-0000-00000000a001';
+select is(pg_temp.wait('00000000-0000-0000-0000-00000000a001'), null, 'encerrar a conversa zera a espera');
+
+select pg_temp.msg('00000000-0000-0000-0000-00000000a001', 'customer', now() + interval '1 minute');
+update conversations set status = 'open' where id = '00000000-0000-0000-0000-00000000a001';
+select is(pg_temp.wait('00000000-0000-0000-0000-00000000a001'), now() + interval '1 minute',
+  'ao reabrir, a espera recomeça na primeira mensagem do cliente depois do encerramento');
+
+update conversations set status = 'closed' where id = '00000000-0000-0000-0000-00000000a001';
+update messages set status = 'sent' where id = (select id from last_reply);
+select is(pg_temp.wait('00000000-0000-0000-0000-00000000a001'), null,
+  'mudança de status de uma resposta em conversa encerrada não traz a espera de volta');
+
+-- D: cliente esperando, encerrada sem resposta e reaberta sem mensagem nova
+select pg_temp.msg('00000000-0000-0000-0000-00000000a004', 'customer', '2026-11-19 07:00+00');
+update conversations set status = 'closed' where id = '00000000-0000-0000-0000-00000000a004';
+update conversations set status = 'pending' where id = '00000000-0000-0000-0000-00000000a004';
+select is(pg_temp.wait('00000000-0000-0000-0000-00000000a004'), null,
+  'reabrir sem mensagem nova do cliente não volta a aguardar');
 
 create function pg_temp.act_as(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);
@@ -91,7 +117,7 @@ select pg_temp.act_as('00000000-0000-0000-0000-0000000000a1');
 
 select results_eq(
   $$ select mine, unassigned, awaiting, unread from inbox_filter_counts() $$,
-  $$ values (0, 1, 1, 1) $$,
+  $$ values (0, 2, 1, 1) $$,
   'contadores: encerradas ficam fora de Sem dono e Aguardando, mas Não lidas conta todas');
 
 select throws_ok(
