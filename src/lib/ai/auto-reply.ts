@@ -1,3 +1,4 @@
+import { aiHandlesConversation } from '@/lib/inbox/badges'
 import { supabaseAdmin } from './admin-client'
 import { loadAiConfig } from './config'
 import { buildConversationContext } from './context'
@@ -65,16 +66,23 @@ export async function dispatchInboundToAiReply(
       .eq('is_active', true)
       .in('trigger_type', ['new_message_received', 'keyword_match'])
       .limit(1)
-    if (autoResponders && autoResponders.length > 0) return
-
     const { data: conv, error: convErr } = await db
       .from('conversations')
-      .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count')
+      .select('assigned_agent_id, ai_autoreply_disabled, bot_handoff_at, ai_reply_count')
       .eq('id', conversationId)
       .maybeSingle()
     if (convErr || !conv) return
-    if (conv.assigned_agent_id) return // a human owns this thread
-    if (conv.ai_autoreply_disabled) return // handed off / turned off here
+    // Mesma regra do selo "🤖 I.A atendendo" no Inbox (lib/inbox/badges).
+    if (
+      !aiHandlesConversation({
+        aiActive: config.isActive,
+        autoReplyEnabled: config.autoReplyEnabled,
+        autoRespondersActive: !!autoResponders && autoResponders.length > 0,
+        conversation: conv,
+      })
+    ) {
+      return
+    }
     // Cheap early-out; the authoritative cap check is the atomic claim
     // below (this read can race a concurrent inbound).
     if (conv.ai_reply_count >= config.autoReplyMaxPerConversation) return
