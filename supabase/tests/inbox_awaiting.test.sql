@@ -83,9 +83,9 @@ select is((select v from via_trigger), '2026-11-19 08:05+00'::timestamptz,
 
 -- B encerrada, aguardando e com não lidas
 select pg_temp.msg('00000000-0000-0000-0000-00000000a002', 'customer', '2026-11-19 09:00+00');
-update conversations set unread_count = 2 where id = '00000000-0000-0000-0000-00000000a002';
-select is(pg_temp.wait('00000000-0000-0000-0000-00000000a002'), null,
-  'cliente escreve em conversa encerrada: a espera não começa');
+select is(pg_temp.wait('00000000-0000-0000-0000-00000000a002'), '2026-11-19 09:00+00'::timestamptz,
+  'cliente escreve em conversa encerrada: ela reabre e a espera começa (059)');
+update conversations set unread_count = 2, status = 'closed' where id = '00000000-0000-0000-0000-00000000a002';
 
 -- Encerrar zera a espera; reabrir recomeça só com o que o cliente
 -- escreveu depois do encerramento. A está aguardando desde 11:00.

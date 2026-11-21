@@ -202,8 +202,10 @@ export interface ConversationEvent {
   id: string;
   account_id: string;
   conversation_id: string;
-  type: 'note' | 'assigned' | 'transferred' | 'unassigned';
-  actor_kind: 'user' | 'automation' | 'flow' | 'ai';
+  /** 'reopened' = reaberta pelo cliente (059). */
+  type: 'note' | 'assigned' | 'transferred' | 'unassigned' | 'reopened';
+  /** 'system' = o banco tirou o responsável (saiu da conta / só visualiza); 'customer' = reabertura. */
+  actor_kind: 'user' | 'automation' | 'flow' | 'ai' | 'system' | 'customer';
   actor_user_id: string | null;
   from_user_id: string | null;
   to_user_id: string | null;

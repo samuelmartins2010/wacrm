@@ -135,14 +135,15 @@ select throws_ok(
   'fluxo/I.A não atribui para quem só visualiza');
 
 -- ── Responsável antigo que virou viewer ─────────────────────────────
--- A trava só olha a troca: outras alterações da conversa continuam.
+-- A trava só olha a troca: uma conversa encerrada (que a 059 não mexe
+-- quando o papel muda) continua podendo ser editada.
 select pg_temp.as_postgres();
-update conversations set assigned_agent_id = '00000000-0000-0000-0000-0000000000f2'
+update conversations set assigned_agent_id = '00000000-0000-0000-0000-0000000000f2', status = 'closed'
  where id = '00000000-0000-0000-0000-00000000f002';
 update profiles set account_role = 'viewer' where user_id = '00000000-0000-0000-0000-0000000000f2';
 select lives_ok(
-  $$ update conversations set status = 'closed' where id = '00000000-0000-0000-0000-00000000f002' $$,
-  'conversa de quem virou viewer ainda pode ser encerrada');
+  $$ update conversations set unread_count = 0 where id = '00000000-0000-0000-0000-00000000f002' $$,
+  'conversa encerrada de quem virou viewer ainda pode ser editada');
 select is(pg_temp.assignee('00000000-0000-0000-0000-00000000f002'), '00000000-0000-0000-0000-0000000000f2'::uuid,
   'e o responsável antigo é mantido até alguém trocar');
 
