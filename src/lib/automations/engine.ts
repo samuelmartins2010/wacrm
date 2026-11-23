@@ -59,6 +59,12 @@ export interface DispatchInput {
   triggerType: AutomationTriggerType
   contactId?: string | null
   context?: AutomationContext
+  /**
+   * 061: when the trigger comes from the event queue, the event's
+   * created_at — only automations already active then may fire (an
+   * automation switched on later does not replay queued events).
+   */
+  activeSince?: string
 }
 
 /**
@@ -97,12 +103,15 @@ export async function runAutomationsForTrigger(input: DispatchInput): Promise<vo
       }
     }
 
-    const { data: automations, error } = await db
+    const automationsQuery = db
       .from('automations')
       .select('*')
       .eq('account_id', input.accountId)
       .eq('trigger_type', input.triggerType)
       .eq('is_active', true)
+    const { data: automations, error } = await (input.activeSince
+      ? automationsQuery.lte('activated_at', input.activeSince)
+      : automationsQuery)
       // D6: every matching automation runs, oldest first (stable order).
       .order('created_at', { ascending: true })
       .order('id', { ascending: true })
@@ -265,6 +274,7 @@ interface TriggerEventRow {
   contact_id: string | null
   context: AutomationContext | null
   depth: number
+  created_at: string
 }
 
 /**
@@ -280,6 +290,19 @@ export async function drainAutomationTriggerEvents(accountId: string | null, lim
   let fired = 0
   try {
     const db = supabaseAdmin()
+    // 061: events left in the queue for more than 10 minutes are dropped
+    // (a late drain must not fire stale tags/assignments).
+    const { data: expired, error: expireErr } = await db.rpc('expire_stale_automation_trigger_events', {
+      p_account_id: accountId,
+    })
+    if (expireErr) {
+      console.error('[automations] expire stale trigger events failed:', expireErr)
+    } else if (Number(expired) > 0) {
+      console.warn('[automations] eventos da fila com mais de 10 min descartados:', {
+        accountId,
+        count: Number(expired),
+      })
+    }
     for (let round = 0; round < 10; round++) {
       const { data, error } = await db.rpc('claim_automation_trigger_events', {
         p_account_id: accountId,
@@ -299,6 +322,8 @@ export async function drainAutomationTriggerEvents(accountId: string | null, lim
             triggerType: ev.trigger_type,
             contactId: ev.contact_id,
             context: { ...(ev.context ?? {}), automation_depth: ev.depth },
+            // 061: only automations already active when the event happened
+            activeSince: ev.created_at,
           })
           fired++
         }

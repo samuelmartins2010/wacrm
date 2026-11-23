@@ -48,6 +48,23 @@ Checklist para tirar a produção da pausa (VPS + Supabase cloud). Siga na ordem
 
 ---
 
+## 2026-11-23: Fila de eventos das automações sem disparos atrasados
+- **Origem:** visto no ponta a ponta do Inbox (PR #7): eventos de "conversa atribuída" que estavam na fila dispararam uma automação ligada depois deles. Pedido do Samuel.
+- **O que mudou:**
+  - Eventos da fila (`tag_added` / `conversation_assigned`, migration 055) **só disparam automações que já estavam ativas quando o evento foi criado**. Ligar uma automação não "recupera" atribuições ou etiquetas antigas.
+  - Evento com **mais de 10 minutos sem processar é descartado** (`status = 'expired'`) e o drain registra no log quantos descartou (`[automations] eventos da fila com mais de 10 min descartados`). O claim nunca devolve evento vencido.
+  - Disparos diretos (mensagem recebida, palavra-chave, primeira mensagem, contato novo) não mudam.
+- **Banco (migrations):** `061_automation_events_active_and_expiry` — `automations.activated_at` (mantido por trigger: hora em que foi ligada; null desligada; backfill das ativas com a última alteração), status `expired`, `expire_stale_automation_trigger_events()` (só servidor) e `claim_automation_trigger_events` ignorando vencidos. Idempotente. **Numerada depois das 057–060 do Inbox: aplicar depois delas (mergear o PR #7 antes deste).**
+- **Arquivos principais:** `src/lib/automations/engine.ts` (`drainAutomationTriggerEvents` expira e passa `activeSince`; `runAutomationsForTrigger` filtra `activated_at <= evento`).
+- **Como foi testado:**
+  - Vitest (`trigger-events.test.ts`): 300 atribuições sem automação ativa → ligar "conversa atribuída" → 0 execuções; 1 atribuição nova → 1; evento de 11 min → `expired` com log. Os dois falharam antes da mudança. Suíte 961/961, typecheck, lint 0 erros, i18n, build.
+  - pgTAP (`automation_events_active_expiry.test.sql`, 12 asserts; falhou antes com "column activated_at does not exist").
+  - Ponta a ponta no banco local pelo cron (`/api/automations/cron`, 23/11/2026): 300 atribuições → ligar a automação → cron → **0 execuções** (300 eventos `done`); 1 atribuição nova → cron → **1 execução** (etiqueta aplicada); evento de 11 minutos → `expired` e a linha no log do servidor. Dados apagados; banco na base.
+- **Commit/branch:** `fix/eventos-automacao-vencidos`.
+- **Pendências / riscos:** automação ligada no mesmo instante de um evento (mesma transação) conta como já ativa. Se o cron ficar mais de 10 minutos parado, os eventos desse intervalo são descartados (intencional: melhor não disparar do que disparar atrasado).
+
+---
+
 ## 2026-11-23: Inbox com filtros, nota interna e transferência com observação
 - **Origem:** item 1 do Grupo A (spec `docs/superpowers/specs/2026-11-19-inbox-filtros-transferencia-design.md`, plano `docs/superpowers/plans/2026-11-19-inbox-filtros-notas-transferencia.md`), com os ajustes A, C, D, E, G e H do Samuel.
 - **O que mudou:**
@@ -85,7 +102,7 @@ Checklist para tirar a produção da pausa (VPS + Supabase cloud). Siga na ordem
   - Ao implantar: aplicar 057–060 em ordem (o backfill da 057 calcula a espera das conversas existentes).
   - Conversas que hoje têm responsável de outra conta ou só visualização continuam como estão até a próxima troca (a 059 só valida mudanças).
   - Acabamentos da revisão da tarefa 8 não feitos: contador de caracteres conta em UTF-16 (mais restritivo que o banco com emojis), o diálogo esvazia antes da animação de fechar, classificação de erro depende do texto da mensagem do banco (fixado pelos testes pgTAP).
-  - Visto no ponta a ponta, já existia antes: eventos de "conversa atribuída" que ficaram na fila são processados por uma automação ativada depois deles; o painel do contato não atualiza etiquetas em tempo real.
+  - Visto no ponta a ponta, já existia antes: eventos de "conversa atribuída" que ficaram na fila são processados por uma automação ativada depois deles (corrigido no PR #8, migration 061); o painel do contato não atualiza etiquetas em tempo real.
   - Lista de fluxos ativos do selo lê até 1.000 execuções.
 
 ---

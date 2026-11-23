@@ -56,9 +56,19 @@ function seed(autos: Record<string, unknown>[], steps: Record<string, unknown>[]
           });
           return 1;
         },
+        // Migration 061: eventos pendentes há mais de 10 min viram "expired".
+        expire_stale_automation_trigger_events: (a) => {
+          const cutoff = new Date(Date.now() - EVENT_TTL_MS).toISOString();
+          const stale = db.tables.automation_trigger_events.filter(
+            (e) => e.status === "pending" && (!a.p_account_id || e.account_id === a.p_account_id) && String(e.created_at) < cutoff,
+          );
+          stale.forEach((r) => (r.status = "expired"));
+          return stale.length;
+        },
         claim_automation_trigger_events: (a) => {
+          const cutoff = new Date(Date.now() - EVENT_TTL_MS).toISOString();
           const rows = db.tables.automation_trigger_events.filter(
-            (e) => e.status === "pending" && (!a.p_account_id || e.account_id === a.p_account_id),
+            (e) => e.status === "pending" && (!a.p_account_id || e.account_id === a.p_account_id) && String(e.created_at) >= cutoff,
           ).slice(0, Number(a.p_limit));
           rows.forEach((r) => (r.status = "processing"));
           return rows;
@@ -69,8 +79,16 @@ function seed(autos: Record<string, unknown>[], steps: Record<string, unknown>[]
   h.db = db;
 }
 
-const auto = (id: string, trigger_type: string, trigger_config: Record<string, unknown>, created_at: string) =>
-  ({ id, account_id: ACC, user_id: "u", name: id, is_active: true, trigger_type, trigger_config, continue_on_reply: false, created_at });
+const EVENT_TTL_MS = 10 * 60_000;
+// activated_at (061): quando a automação foi ligada. Padrão bem antigo,
+// para os testes que não tratam disso.
+const auto = (
+  id: string,
+  trigger_type: string,
+  trigger_config: Record<string, unknown>,
+  created_at: string,
+  activated_at = "2000-01-01T00:00:00.000Z",
+) => ({ id, account_id: ACC, user_id: "u", name: id, is_active: true, trigger_type, trigger_config, continue_on_reply: false, created_at, activated_at });
 const step = (automation_id: string, step_type: string, step_config: Record<string, unknown>) =>
   ({ id: `${automation_id}-s`, automation_id, position: 0, step_type, step_config, parent_step_id: null, branch: null });
 const ran = () => db.tables.automation_logs.map((l) => l.automation_id);
@@ -148,5 +166,42 @@ describe("triggerMatches for tag_added", () => {
     const a = { trigger_type: "tag_added", trigger_config: { tag_id: "A" } } as never;
     expect(triggerMatches(a, { tag_id: "A" })).toBe(true);
     expect(triggerMatches(a, { tag_id: "B" })).toBe(false);
+  });
+});
+
+describe("061: eventos da fila só para automações já ativas, e eventos vencidos descartados", () => {
+  const assignEvent = (created_at: string) =>
+    db.tables.automation_trigger_events.push({
+      id: newId(), account_id: ACC, trigger_type: "conversation_assigned", contact_id: C,
+      context: { agent_id: "agent", conversation_id: "conv1" }, depth: 0, status: "pending", created_at,
+    });
+
+  it("300 atribuições sem automação ativa, depois ativar uma 'conversa atribuída' → 0 execuções; 1 atribuição nova → 1", async () => {
+    seed([], []);
+    const t0 = Date.now() - 60_000; // há 1 minuto (dentro dos 10 min)
+    for (let i = 0; i < 300; i++) assignEvent(new Date(t0 + i).toISOString());
+    // a automação é ligada agora, depois dos 300 eventos
+    db.tables.automations.push(auto("onAssign", "conversation_assigned", {}, "1", new Date().toISOString()));
+    db.tables.automation_steps.push(step("onAssign", "send_message", { text: "atribuída" }));
+
+    await drainAutomationTriggerEvents(ACC);
+    expect(ran()).toEqual([]);
+    expect(db.tables.automation_trigger_events.filter((e) => e.status === "pending")).toHaveLength(0);
+
+    await new Promise((r) => setTimeout(r, 5));
+    assignEvent(new Date().toISOString());
+    await drainAutomationTriggerEvents(ACC);
+    expect(ran()).toEqual(["onAssign"]);
+  });
+
+  it("evento pendente há mais de 10 minutos é descartado com log, mesmo com automação ativa antes", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    seed([auto("onAssign", "conversation_assigned", {}, "1")], [step("onAssign", "send_message", { text: "atribuída" })]);
+    assignEvent(new Date(Date.now() - 11 * 60_000).toISOString());
+    await drainAutomationTriggerEvents(ACC);
+    expect(ran()).toEqual([]);
+    expect(db.tables.automation_trigger_events[0].status).toBe("expired");
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("descartado"), expect.anything());
+    warn.mockRestore();
   });
 });
