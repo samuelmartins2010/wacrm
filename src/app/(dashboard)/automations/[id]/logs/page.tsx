@@ -143,8 +143,18 @@ export default function AutomationLogsPage({
                 {isOpen && (
                   <div className="border-t border-border px-4 py-3">
                     {log.error_message && (
-                      <p className="mb-3 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-                        {log.error_message}
+                      // Descarte (skipped) não é erro: motivo em tom neutro.
+                      <p
+                        className={cn(
+                          "mb-3 rounded-md border px-3 py-2 text-xs",
+                          log.status === "skipped"
+                            ? "border-border bg-muted text-muted-foreground"
+                            : "border-red-500/30 bg-red-500/10 text-red-300",
+                        )}
+                      >
+                        {log.status === "skipped" && log.error_message === "evento vencido"
+                          ? t("skippedStale")
+                          : log.error_message}
                       </p>
                     )}
                     <ul className="space-y-1.5">
@@ -172,7 +182,7 @@ function StatusBadge({ status, t }: { status: AutomationLog["status"], t: Return
       ? "border-primary/30 bg-primary/10 text-primary"
       : status === "partial" || status === "waiting"
       ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
-      : status === "cancelled"
+      : status === "cancelled" || status === "skipped"
       ? "border-border bg-muted text-muted-foreground"
       : "border-red-500/30 bg-red-500/10 text-red-300"
   return (

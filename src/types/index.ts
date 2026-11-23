@@ -489,7 +489,8 @@ export type AutomationStepType =
   | 'send_webhook'
   | 'close_conversation';
 
-export type AutomationLogStatus = 'success' | 'partial' | 'failed' | 'cancelled' | 'waiting';
+/** 'skipped' = evento da fila descartado por estar vencido (migration 061). */
+export type AutomationLogStatus = 'success' | 'partial' | 'failed' | 'cancelled' | 'waiting' | 'skipped';
 
 export interface KeywordMatchTriggerConfig {
   keywords: string[];

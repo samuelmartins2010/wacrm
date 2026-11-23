@@ -926,10 +926,12 @@
         "partial": "partial",
         "failed": "failed",
         "cancelled": "Cancelled",
-        "waiting": "Waiting"
+        "waiting": "Waiting",
+        "skipped": "Skipped"
       },
       "back": "Back",
-      "backAria": "Back"
+      "backAria": "Back",
+      "skippedStale": "Not run: the event waited more than 60 minutes in the queue (stale event)."
     },
     "builder": {
       "steps": {
