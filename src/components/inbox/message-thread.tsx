@@ -9,6 +9,7 @@ import { presenceLabel } from "@/lib/presence";
 import { cn } from "@/lib/utils";
 import type {
   Conversation,
+  ConversationEvent,
   Message,
   MessageReaction,
   Contact,
@@ -52,6 +53,10 @@ import { AiThreadBanner } from "./ai-thread-banner";
 import { buildReplyPreview } from "./reply-quote";
 import { toast } from "sonner";
 import { pingAutomationEvents } from "@/lib/automations/ping";
+import { mergeTimeline, type TimelineItem } from "@/lib/inbox/timeline";
+import { normalizeNote } from "@/lib/inbox/notes";
+import { ConversationEventItem } from "./conversation-event";
+import { NoteComposer } from "./note-composer";
 
 interface ReplyDraft {
   id: string;
@@ -119,17 +124,18 @@ function formatDateSeparator(dateStr: string, t: ReturnType<typeof useTranslatio
   return format(date, "MMMM d, yyyy");
 }
 
-function groupMessagesByDate(messages: Message[]) {
-  const groups: { date: string; messages: Message[] }[] = [];
+// Agrupa a linha do tempo (mensagens + notas/eventos) por dia.
+function groupTimelineByDate(items: TimelineItem[]) {
+  const groups: { date: string; items: TimelineItem[] }[] = [];
   let currentDate = "";
 
-  for (const msg of messages) {
-    const day = format(new Date(msg.created_at), "yyyy-MM-dd");
+  for (const item of items) {
+    const day = format(new Date(item.at), "yyyy-MM-dd");
     if (day !== currentDate) {
       currentDate = day;
-      groups.push({ date: msg.created_at, messages: [msg] });
+      groups.push({ date: item.at, items: [item] });
     } else {
-      groups[groups.length - 1].messages.push(msg);
+      groups[groups.length - 1].items.push(item);
     }
   }
 
@@ -172,6 +178,7 @@ export function MessageThread({
   const t = useTranslations("Inbox.messageThread");
   const tTimer = useTranslations("Inbox.sessionTimer");
   const tQuote = useTranslations("Inbox.replyQuote");
+  const tComposer = useTranslations("Inbox.composer");
 
   const { user } = useAuth();
   const { getPresence, getRow, now } = usePresence();
@@ -180,6 +187,9 @@ export function MessageThread({
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [reactions, setReactions] = useState<MessageReaction[]>([]);
+  // Notas internas e trocas de responsável (conversation_events).
+  const [events, setEvents] = useState<ConversationEvent[]>([]);
+  const [composerTab, setComposerTab] = useState<"reply" | "note">("reply");
   // Purely visual spin state for the manual-refresh button. The actual
   // refetch is fire-and-forget through `onRefresh` (which bumps the
   // parent's resyncToken); the 700ms spin is just feedback so the click
@@ -221,7 +231,9 @@ export function MessageThread({
           return;
         }
         // 059: só visualizar não pode ser responsável (o banco recusa).
-        setProfiles(((data as Profile[]) ?? []).filter((p) => p.account_role !== "viewer"));
+        // Todos (para os nomes na linha do tempo); o menu de responsável
+        // usa só quem pode ser responsável (059).
+        setProfiles((data as Profile[]) ?? []);
       });
     return () => {
       cancelled = true;
@@ -411,6 +423,94 @@ export function MessageThread({
       supabase.removeChannel(channel);
     };
   }, [conversationId]);
+
+  // Eventos da conversa (notas, trocas de responsável, reabertura): carga
+  // junto das mensagens e INSERT em tempo real. A RLS limita à conta.
+  useEffect(() => {
+    if (!conversationId) return;
+    const supabase = createClient();
+    let cancelled = false;
+    supabase
+      .from("conversation_events")
+      .select("*")
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: true })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.error("Failed to fetch conversation events:", error);
+          return;
+        }
+        setEvents((data as ConversationEvent[]) ?? []);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId, resyncToken]);
+
+  useEffect(() => {
+    if (!conversationId) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`conversation-events:${conversationId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "conversation_events",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          const row = payload.new as ConversationEvent;
+          setEvents((prev) => (prev.some((e) => e.id === row.id) ? prev : [...prev, row]));
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [conversationId]);
+
+  // Trocar de conversa volta para "Responder" e limpa os eventos antigos.
+  useEffect(() => {
+    setComposerTab("reply");
+    setEvents([]);
+  }, [conversationId]);
+
+  const handleSaveNote = useCallback(
+    async (body: string): Promise<boolean> => {
+      if (!conversationId) return false;
+      const note = normalizeNote(body);
+      if (!note) return false;
+      const { data, error } = await createClient().rpc("add_conversation_note", {
+        p_conversation_id: conversationId,
+        p_body: note,
+      });
+      if (error) {
+        console.error("Failed to save note:", error);
+        toast.error(tComposer("noteSaveError"));
+        return false;
+      }
+      // Mostra na hora; o INSERT do tempo real chega depois e não duplica.
+      if (data && typeof data === "object" && "id" in data) {
+        const row = data as ConversationEvent;
+        setEvents((prev) => (prev.some((e) => e.id === row.id) ? prev : [...prev, row]));
+      }
+      setComposerTab("reply");
+      return true;
+    },
+    [conversationId, tComposer],
+  );
+
+  const nameOf = useCallback(
+    (userId: string | null) => {
+      if (!userId) return null;
+      const p = profiles.find((x) => x.user_id === userId);
+      return p ? p.full_name || p.email || null : null;
+    },
+    [profiles],
+  );
 
   // Clear any in-progress reply draft when the active conversation changes —
   // a quote pulled from conversation A shouldn't bleed into conversation B.
@@ -861,7 +961,8 @@ export function MessageThread({
   }
 
   const displayName = contact.name || contact.phone;
-  const messageGroups = groupMessagesByDate(messages);
+  const timelineGroups = groupTimelineByDate(mergeTimeline(messages, events));
+  const assignableProfiles = profiles.filter((p) => p.account_role !== "viewer");
   const currentStatus = STATUS_OPTIONS.find(
     (s) => s.value === conversation.status
   );
@@ -1009,12 +1110,12 @@ export function MessageThread({
               align="end"
               className="border-border bg-popover"
             >
-              {profiles.length === 0 ? (
+              {assignableProfiles.length === 0 ? (
                 <DropdownMenuItem disabled className="text-sm text-muted-foreground">
                   {t("noTeammates")}
                 </DropdownMenuItem>
               ) : (
-                profiles.map((p) => {
+                assignableProfiles.map((p) => {
                   const isSelected = p.user_id === assignedAgentId;
                   const presence = getPresence(p.user_id);
                   return (
@@ -1066,7 +1167,7 @@ export function MessageThread({
           <div className="flex items-center justify-center py-12">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           </div>
-        ) : messages.length === 0 ? (
+        ) : messages.length === 0 && events.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
             <p className="text-sm text-muted-foreground">{t("noMessagesYet")}</p>
             <p className="text-xs text-muted-foreground">
@@ -1075,7 +1176,7 @@ export function MessageThread({
           </div>
         ) : (
           <div className="space-y-4">
-            {messageGroups.map((group) => (
+            {timelineGroups.map((group) => (
               <div key={group.date}>
                 {/* Date separator */}
                 <div className="mb-4 flex items-center justify-center">
@@ -1085,7 +1186,13 @@ export function MessageThread({
                 </div>
                 {/* Messages */}
                 <div className="space-y-2">
-                  {group.messages.map((msg) => {
+                  {group.items.map((item) => {
+                    if (item.kind === "event") {
+                      return (
+                        <ConversationEventItem key={`ev-${item.event.id}`} event={item.event} nameOf={nameOf} />
+                      );
+                    }
+                    const msg = item.message;
                     const parent = msg.reply_to_message_id
                       ? messagesById.get(msg.reply_to_message_id)
                       : null;
@@ -1152,7 +1259,31 @@ export function MessageThread({
         }}
       />
 
-      {/* Composer */}
+      {/* Composer: Responder (vai para o cliente) / Nota interna (só a equipe) */}
+      <div role="tablist" aria-label={tComposer("tabsLabel")} className="flex gap-1 border-t border-border bg-card px-3 pt-2">
+        {(["reply", "note"] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={composerTab === tab}
+            onClick={() => setComposerTab(tab)}
+            className={cn(
+              "rounded-t-md px-3 py-1.5 text-xs font-medium transition-colors",
+              composerTab === tab
+                ? tab === "note"
+                  ? "bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-200"
+                  : "bg-muted text-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {tab === "reply" ? tComposer("tabReply") : tComposer("tabNote")}
+          </button>
+        ))}
+      </div>
+      {composerTab === "note" ? (
+        <NoteComposer key={conversation.id} onSave={handleSaveNote} />
+      ) : (
       <MessageComposer
         conversationId={conversation.id}
         sessionExpired={sessionInfo.expired}
@@ -1163,6 +1294,7 @@ export function MessageThread({
         replyTo={replyTo}
         onClearReply={() => setReplyTo(null)}
       />
+      )}
 
       <TemplatePicker
         open={templateModalOpen}

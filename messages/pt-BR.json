@@ -230,7 +230,14 @@
       "send": "Enviar",
       "quickReplyNamePrompt": "Dê um nome a esta resposta rápida:",
       "quickReplySaved": "Salva como resposta rápida.",
-      "quickReplySaveError": "Não foi possível salvar a resposta rápida."
+      "quickReplySaveError": "Não foi possível salvar a resposta rápida.",
+      "tabsLabel": "Responder ou nota interna",
+      "tabReply": "Responder",
+      "tabNote": "Nota interna",
+      "saveNote": "Salvar nota",
+      "noteHint": "Só a equipe vê esta nota",
+      "notePlaceholder": "Escreva uma nota para a equipe (o cliente não vê)…",
+      "noteSaveError": "Não foi possível salvar a nota."
     },
     "bubble": {
       "photo": "Foto",
@@ -306,6 +313,21 @@
       "minutes": "{n} min",
       "hours": "{n} h",
       "days": "{n} d"
+    },
+    "events": {
+      "noteHeader": "Nota interna · {author} · {time}",
+      "assigned": "{actor} atribuiu a conversa a {to}",
+      "transferred": "{actor} transferiu de {from} para {to}",
+      "unassigned": "{actor} removeu {from} como responsável",
+      "unassignedBySystem": "{from} perdeu o acesso: conversa voltou para Sem dono",
+      "reopened": "Reaberta pelo cliente",
+      "actorAutomation": "Automação",
+      "actorFlow": "Fluxo",
+      "actorAi": "I.A",
+      "actorSystem": "Sistema",
+      "actorCustomer": "Cliente",
+      "someone": "Alguém",
+      "removedMember": "ex-membro"
     }
   },
   "Contacts": {

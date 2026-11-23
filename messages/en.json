@@ -230,7 +230,14 @@
       "send": "Send",
       "quickReplyNamePrompt": "Name this quick reply:",
       "quickReplySaved": "Saved as a quick reply.",
-      "quickReplySaveError": "Couldn't save the quick reply."
+      "quickReplySaveError": "Couldn't save the quick reply.",
+      "tabsLabel": "Reply or internal note",
+      "tabReply": "Reply",
+      "tabNote": "Internal note",
+      "saveNote": "Save note",
+      "noteHint": "Only your team sees this note",
+      "notePlaceholder": "Write a note for your team (the customer won’t see it)…",
+      "noteSaveError": "Couldn’t save the note."
     },
     "bubble": {
       "photo": "Photo",
@@ -306,6 +313,21 @@
       "minutes": "{n} min",
       "hours": "{n} h",
       "days": "{n} d"
+    },
+    "events": {
+      "noteHeader": "Internal note · {author} · {time}",
+      "assigned": "{actor} assigned the conversation to {to}",
+      "transferred": "{actor} transferred from {from} to {to}",
+      "unassigned": "{actor} removed {from} as assignee",
+      "unassignedBySystem": "{from} lost access: conversation is unassigned again",
+      "reopened": "Reopened by the customer",
+      "actorAutomation": "Automation",
+      "actorFlow": "Flow",
+      "actorAi": "AI",
+      "actorSystem": "System",
+      "actorCustomer": "Customer",
+      "someone": "Someone",
+      "removedMember": "former member"
     }
   },
   "Contacts": {
