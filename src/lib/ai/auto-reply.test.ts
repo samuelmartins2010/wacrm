@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
     claim: true as boolean,
     updatePayload: null as Record<string, unknown> | null,
     rpcCalls: [] as { name: string; args: unknown }[],
+    rpcError: null as { message: string } | null,
   },
 }))
 
@@ -52,6 +53,9 @@ vi.mock('./admin-client', () => ({
     },
     rpc: (name: string, args: unknown) => {
       h.state.rpcCalls.push({ name, args })
+      if (name === 'record_assignment_event') {
+        return Promise.resolve({ data: null, error: h.state.rpcError })
+      }
       return Promise.resolve({ data: h.state.claim, error: null })
     },
   }),
@@ -91,6 +95,7 @@ beforeEach(() => {
   h.state.claim = true
   h.state.updatePayload = null
   h.state.rpcCalls = []
+  h.state.rpcError = null
   h.loadAiConfig.mockResolvedValue(aiConfig())
   h.buildConversationContext.mockResolvedValue([{ role: 'user', content: 'hi' }])
   h.retrieveKnowledge.mockResolvedValue([])
@@ -200,13 +205,57 @@ describe('dispatchInboundToAiReply — handoff', () => {
     expect(h.state.updatePayload).not.toHaveProperty('assigned_agent_id')
   })
 
-  it('routes to the configured handoff agent on handoff', async () => {
+  it('routes to the configured handoff agent via record_assignment_event', async () => {
     h.loadAiConfig.mockResolvedValue(aiConfig({ handoffAgentId: 'agent-7' }))
     h.generateReply.mockResolvedValue({ text: '', handoff: true })
     await dispatchInboundToAiReply(ARGS)
-    expect(h.state.updatePayload).toMatchObject({
-      ai_autoreply_disabled: true,
-      assigned_agent_id: 'agent-7',
-    })
+    expect(h.state.updatePayload).toMatchObject({ ai_autoreply_disabled: true })
+    expect(h.state.updatePayload).not.toHaveProperty('assigned_agent_id')
+    const summary = h.state.updatePayload?.ai_handoff_summary
+    expect(typeof summary).toBe('string')
+    expect(h.state.rpcCalls).toEqual([
+      {
+        name: 'record_assignment_event',
+        args: {
+          p_conversation_id: 'conv-1',
+          p_to_user_id: 'agent-7',
+          p_actor_kind: 'ai',
+          p_actor_user_id: null,
+          p_note: summary,
+          // não passa por cima de quem assumiu enquanto a I.A pensava
+          p_only_if_unassigned: true,
+        },
+      },
+    ])
+  })
+
+  it('does not call the RPC when the conversation already has an assignee', async () => {
+    h.loadAiConfig.mockResolvedValue(aiConfig({ handoffAgentId: 'agent-7' }))
+    h.generateReply.mockResolvedValue({ text: '', handoff: true })
+    h.state.conv = {
+      assigned_agent_id: 'agent-9',
+      ai_autoreply_disabled: false,
+      ai_reply_count: 0,
+    }
+    await dispatchInboundToAiReply(ARGS)
+    expect(
+      h.state.rpcCalls.some((c) => c.name === 'record_assignment_event'),
+    ).toBe(false)
+  })
+
+  it('logs an RPC error and still keeps the handoff update', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    h.loadAiConfig.mockResolvedValue(aiConfig({ handoffAgentId: 'agent-7' }))
+    h.generateReply.mockResolvedValue({ text: '', handoff: true })
+    h.state.rpcError = { message: 'assignee has a view-only role in this account' }
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.state.updatePayload).toMatchObject({ ai_autoreply_disabled: true })
+    expect(h.state.rpcCalls.map((c) => c.name)).toEqual(['record_assignment_event'])
+    expect(err).toHaveBeenCalledWith(
+      expect.stringContaining('record_assignment_event'),
+      expect.anything(),
+    )
+    expect(h.engineSendText).not.toHaveBeenCalled()
+    err.mockRestore()
   })
 })

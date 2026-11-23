@@ -152,16 +152,34 @@ export async function dispatchInboundToAiReply(
         messages,
         replyCount: conv.ai_reply_count ?? 0,
       })
-      const update: Record<string, unknown> = {
-        ai_autoreply_disabled: true,
-        ai_handoff_summary: summary,
-      }
+      await db
+        .from('conversations')
+        .update({ ai_autoreply_disabled: true, ai_handoff_summary: summary })
+        .eq('id', conversationId)
       // Only set the assignee when a target is configured AND the thread
       // isn't already owned — never stomp an existing human assignment.
+      // Goes through the RPC so the change lands in conversation_events
+      // with the summary as its note. Best-effort: a refused assignee
+      // (other account / view-only) is logged, the handoff stands.
       if (config.handoffAgentId && !conv.assigned_agent_id) {
-        update.assigned_agent_id = config.handoffAgentId
+        const { error: assignErr } = await db.rpc('record_assignment_event', {
+          p_conversation_id: conversationId,
+          p_to_user_id: config.handoffAgentId,
+          p_actor_kind: 'ai',
+          p_actor_user_id: null,
+          p_note: summary,
+          // A leitura de `conv` é de antes da chamada ao modelo: se um
+          // atendente assumiu nesse meio-tempo, o banco (linha travada)
+          // não deixa a I.A passar por cima.
+          p_only_if_unassigned: true,
+        })
+        if (assignErr) {
+          console.error(
+            '[ai auto-reply] record_assignment_event failed:',
+            assignErr,
+          )
+        }
       }
-      await db.from('conversations').update(update).eq('id', conversationId)
       return
     }
 

@@ -14,13 +14,14 @@ type Params = { params: Promise<{ conversationId: string }> }
  * Body: { paused: boolean, assign_to_me?: boolean }
  *   - paused: true  → pause the bot here (a human is taking over). When
  *                     `assign_to_me` is set, also assign the thread to the
- *                     caller (the usual "Take over" flow). Assignment
- *                     fires the `on_conversation_assigned` trigger.
+ *                     caller (the usual "Take over" flow) via the
+ *                     `transfer_conversation` RPC, which records the event.
+ *                     Assignment fires the `on_conversation_assigned` trigger.
  *   - paused: false → hand the thread back to the bot: clear the pause,
  *                     reset the per-conversation reply count so it gets
- *                     fresh slots, and clear the handoff note. If the
- *                     caller currently owns the thread, unassign it too so
- *                     the bot isn't blocked by the "human owns this" gate.
+ *                     fresh slots, and clear the handoff note. Any assignee
+ *                     is removed (same RPC, p_to_user_id null) so the bot
+ *                     isn't blocked by the "human owns this" gate.
  *
  * Writes go through the RLS-scoped SSR client, so a conversation outside
  * the caller's account simply isn't found (404).
@@ -63,19 +64,47 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
     }
 
+    // The assignee change goes through transfer_conversation (caller's
+    // RLS client) so it lands in conversation_events as the caller's
+    // action. It runs BEFORE the pause write: if it's refused, the AI
+    // state stays as it was.
+    //   - "Take over" (paused + assign_to_me) → assign to the caller.
+    //   - "Resume AI" → release ANY assignment, not just the caller's
+    //     own: the auto-reply eligibility gate stands down whenever a
+    //     human is assigned, so leaving a stale assignee (e.g. the agent
+    //     a prior handoff routed to) would silently keep the bot muted
+    //     and make "Resume AI" a no-op.
+    const assignTo: string | null | undefined = paused
+      ? assignToMe
+        ? userId
+        : undefined
+      : null
+    if (assignTo !== undefined) {
+      const { error: rpcErr } = await supabase.rpc('transfer_conversation', {
+        p_conversation_id: conversationId,
+        p_to_user_id: assignTo,
+        p_note: null,
+      })
+      if (rpcErr) {
+        if (rpcErr.code === '42501') {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        }
+        if (rpcErr.code === '22023') {
+          return NextResponse.json({ error: rpcErr.message }, { status: 400 })
+        }
+        console.error('[ai/autoreply] transfer_conversation error:', rpcErr)
+        return NextResponse.json(
+          { error: 'Failed to update conversation' },
+          { status: 500 },
+        )
+      }
+    }
+
     const update: Record<string, unknown> = { ai_autoreply_disabled: paused }
 
-    if (paused) {
-      if (assignToMe) update.assigned_agent_id = userId
-    } else {
-      // Resuming hands the thread *back to the bot*. Clear the pause and
-      // the handoff note, and — crucially — release ANY assignment, not
-      // just the caller's own: the auto-reply eligibility gate stands
-      // down whenever a human is assigned, so leaving a stale assignee
-      // (e.g. the agent a prior handoff routed to) would silently keep
-      // the bot muted and make "Resume AI" a no-op. This is the explicit
-      // choice to let the bot own the thread again.
-      update.assigned_agent_id = null
+    if (!paused) {
+      // Resuming hands the thread *back to the bot*: clear the pause and
+      // the handoff note (the assignee was released above).
       // Give the bot a fresh reply budget on this thread. This is a
       // deliberate, manual, rate-limited action (not automatable), so it
       // can't be used to bypass the per-conversation cap at scale — it's
@@ -98,7 +127,7 @@ export async function POST(request: Request, { params }: Params) {
     }
 
     // D3: "assign to me" fires conversation_assigned automations.
-    if (update.assigned_agent_id) await drainAutomationTriggerEvents(accountId)
+    if (assignTo) await drainAutomationTriggerEvents(accountId)
 
     return NextResponse.json({ success: true, paused })
   } catch (err) {

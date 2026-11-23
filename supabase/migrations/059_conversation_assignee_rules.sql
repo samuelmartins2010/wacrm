@@ -178,3 +178,48 @@ DROP TRIGGER IF EXISTS profiles_unassign_on_access_loss ON profiles;
 CREATE TRIGGER profiles_unassign_on_access_loss
   AFTER UPDATE OF account_id, account_role OR DELETE ON profiles
   FOR EACH ROW EXECUTE FUNCTION profiles_unassign_on_access_loss();
+
+-- ============================================================
+-- Handoff da I.A sem tirar a conversa de um humano
+--   record_assignment_event ganha p_only_if_unassigned: com a linha da
+--   conversa travada, só atribui se ela ainda não tem responsável. A I.A
+--   lê a conversa segundos antes (chamada ao modelo); se um atendente
+--   clicou "Assumir" nesse meio-tempo, a I.A não passa por cima.
+--   A versão de 5 parâmetros (058) sai; nada no banco depende dela e as
+--   chamadas existentes continuam válidas (o novo parâmetro tem default).
+-- ============================================================
+DROP FUNCTION IF EXISTS record_assignment_event(UUID, UUID, TEXT, UUID, TEXT);
+
+CREATE OR REPLACE FUNCTION record_assignment_event(
+  p_conversation_id UUID,
+  p_to_user_id UUID,
+  p_actor_kind TEXT,
+  p_actor_user_id UUID DEFAULT NULL,
+  p_note TEXT DEFAULT NULL,
+  p_only_if_unassigned BOOLEAN DEFAULT false
+) RETURNS conversation_events
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_current UUID;
+BEGIN
+  IF p_actor_kind IS NULL OR p_actor_kind NOT IN ('user', 'automation', 'flow', 'ai') THEN
+    RAISE EXCEPTION 'invalid actor_kind %', p_actor_kind USING ERRCODE = '22023';
+  END IF;
+  IF p_only_if_unassigned THEN
+    SELECT assigned_agent_id INTO v_current
+      FROM conversations WHERE id = p_conversation_id
+       FOR UPDATE;
+    IF v_current IS NOT NULL THEN
+      RETURN NULL;  -- já tem responsável: não mexe, não grava nada
+    END IF;
+  END IF;
+  RETURN _assign_with_event(p_conversation_id, p_to_user_id, p_actor_kind, p_actor_user_id, p_note);
+END;
+$$;
+
+ALTER FUNCTION record_assignment_event(UUID, UUID, TEXT, UUID, TEXT, BOOLEAN) OWNER TO postgres;
+REVOKE ALL ON FUNCTION record_assignment_event(UUID, UUID, TEXT, UUID, TEXT, BOOLEAN) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION record_assignment_event(UUID, UUID, TEXT, UUID, TEXT, BOOLEAN) TO service_role;

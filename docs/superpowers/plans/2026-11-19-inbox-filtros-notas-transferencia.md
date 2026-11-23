@@ -17,7 +17,7 @@
 - Humano = `messages.sender_type = 'agent'` com `sent_via_api = false` e `status <> 'failed'`. `bot` e API v1 nunca zeram a espera.
 - Cores: até 15 min neutro · 15 min a 1 h amarelo · mais de 1 h vermelho (limites: `< 15 min` neutro, `>= 15 min e < 60 min` amarelo, `>= 60 min` vermelho).
 - Nota: texto puro, 1 a 2.000 caracteres (após `btrim`), imutável.
-- `conversation_events.type` ∈ `note | assigned | transferred | unassigned`; `actor_kind` ∈ `user | automation | flow | ai`.
+- `conversation_events.type` ∈ `note | assigned | transferred | unassigned | reopened`; `actor_kind` ∈ `user | automation | flow | ai | system | customer` (059: reabertura pelo cliente e responsável tirado pelo sistema).
 - Nenhuma tela grava `assigned_agent_id` direto.
 - Textos novos em `messages/pt-BR.json` **e** `messages/en.json`; `npm run i18n:check` tem que passar.
 - Testes: `TZ=UTC LC_ALL=en_US.UTF-8 npx vitest run`; banco: `npx supabase test db` (Supabase local rodando, migrations aplicadas com `npx supabase migration up`).
@@ -181,8 +181,8 @@
 
 - [ ] **Step 1: Escrever os testes**:
   - fluxo: `handOffRun` com `assignTo` chama `db.rpc('record_assignment_event', { p_conversation_id, p_to_user_id: assignTo, p_actor_kind: 'flow', p_actor_user_id: null, p_note: null })` e o `update` de `conversations` **não** leva mais `assigned_agent_id`; sem `assignTo`, não chama a RPC;
-  - I.A: na entrega com `handoffAgentId` e sem responsável, chama a RPC com `p_actor_kind: 'ai'` e `p_note` = o `summary` de `buildHandoffSummary`; o `update` não leva `assigned_agent_id`;
-  - banner da I.A: "Assumir" (`paused: true, assign_to_me: true`) chama `rpc('transfer_conversation', { p_conversation_id, p_to_user_id: userId, p_note: null })` com o cliente do usuário (evento `actor_kind = 'agent'`); "Retomar I.A" que remove o responsável chama a mesma RPC com `p_to_user_id: null`; o `update` não leva mais `assigned_agent_id`; erro da RPC responde 4xx/5xx e não muda a pausa da I.A.
+  - I.A: na entrega com `handoffAgentId` e sem responsável, chama a RPC com `p_actor_kind: 'ai'`, `p_note` = o `summary` de `buildHandoffSummary` e `p_only_if_unassigned: true` (revisão: não passar por cima de quem assumiu enquanto a I.A pensava); o `update` não leva `assigned_agent_id`;
+  - banner da I.A: "Assumir" (`paused: true, assign_to_me: true`) chama `rpc('transfer_conversation', { p_conversation_id, p_to_user_id: userId, p_note: null })` com o cliente do usuário (evento `actor_kind = 'user'`); "Retomar I.A" que remove o responsável chama a mesma RPC com `p_to_user_id: null`; o `update` não leva mais `assigned_agent_id`; erro da RPC responde 4xx/5xx e não muda a pausa da I.A.
 - [ ] **Step 2: Rodar e ver falhar** · `TZ=UTC LC_ALL=en_US.UTF-8 npx vitest run src/lib/flows/engine.test.ts src/lib/ai/auto-reply.test.ts` · Expected: FAIL nos casos novos.
 - [ ] **Step 3: Implementar**: tirar `assigned_agent_id` dos `update` e chamar a RPC logo depois (o `update` dos outros campos continua igual). Erro da RPC é logado e não derruba o handoff (mesmo padrão de best-effort do arquivo).
 - [ ] **Step 4: Rodar** os mesmos testes · Expected: PASS.

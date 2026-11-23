@@ -3,7 +3,7 @@
 -- tela/API, transferência, automação, fluxo/I.A, em massa).
 -- Roda com `npx supabase test db`.
 begin;
-select plan(17);
+select plan(20);
 
 -- g1 dono da conta A; g2 atendente de A; g3 só visualiza em A;
 -- g9 dono da própria conta (B).
@@ -133,6 +133,27 @@ select throws_ok(
   $$ select record_assignment_event('00000000-0000-0000-0000-00000000f001', '00000000-0000-0000-0000-0000000000f3', 'ai') $$,
   '22023', 'assignee has a view-only role in this account',
   'fluxo/I.A não atribui para quem só visualiza');
+
+-- ── Handoff da I.A não tira a conversa de quem acabou de assumir ────
+-- p_only_if_unassigned: só atribui se, com a linha travada, ainda não há
+-- responsável (a I.A leu a conversa segundos antes de chamar).
+select pg_temp.as_postgres();
+update conversations set assigned_agent_id = '00000000-0000-0000-0000-0000000000f1'
+ where id = '00000000-0000-0000-0000-00000000f003';
+select pg_temp.as_service();
+select is(
+  (select record_assignment_event('00000000-0000-0000-0000-00000000f003', '00000000-0000-0000-0000-0000000000f2',
+                                  'ai', null, 'resumo', p_only_if_unassigned => true)),
+  null::conversation_events, 'I.A com p_only_if_unassigned não mexe em conversa que já tem responsável');
+select pg_temp.as_postgres();
+select is((select count(*) from conversation_events where conversation_id = '00000000-0000-0000-0000-00000000f003'),
+  0::bigint, 'e não grava nota nem evento');
+update conversations set assigned_agent_id = null where id = '00000000-0000-0000-0000-00000000f003';
+select pg_temp.as_service();
+select is(
+  (select (record_assignment_event('00000000-0000-0000-0000-00000000f003', '00000000-0000-0000-0000-0000000000f2',
+                                   'ai', null, null, p_only_if_unassigned => true)).type),
+  'assigned', 'sem responsável, a I.A atribui normalmente');
 
 -- ── Responsável antigo que virou viewer ─────────────────────────────
 -- A trava só olha a troca: uma conversa encerrada (que a 059 não mexe
