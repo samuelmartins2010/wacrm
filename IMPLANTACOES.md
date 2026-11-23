@@ -63,6 +63,23 @@ Checklist para tirar a produção da pausa (VPS + Supabase cloud). Siga na ordem
   - Suíte: vitest 1005/1005, typecheck, lint (0 erros), i18n:check, pgTAP 14 arquivos / 193 asserts (cada regra nova com teste que falhou antes), build.
   - Revisões independentes (subagente) das tarefas 2, 5 e 8: aprovadas com ajustes, todos feitos.
   - Ponta a ponta local (23/11/2026; dev com proxy falso da Meta e da OpenAI, saída externa bloqueada, `REACTIVATION_DRY_RUN=true`): webhook assinado de contato novo → conversa em Aguardando e Sem dono, contadores subiram sem recarregar, selo da I.A; I.A respondeu pelo proxy e a API v1 mandou mensagem → continuou em Aguardando; contato em fluxo com o selo de fluxo; atendente respondeu pelo Inbox → saiu de Aguardando e o contador caiu sem recarregar; nota interna apareceu sem nenhuma chamada à Meta e sem mudar a última mensagem; transferência com observação para outra atendente → linha + nota, notificação com o texto e automação "conversa atribuída" rodou (etiqueta aplicada). Dados apagados; banco de volta à base (4 contatos / 4 conversas / 7 mensagens).
+  - Caminhos que criam conversa ou definem responsável, testados rodando depois da 060 (23/11/2026, banco local + dev com proxy falso): página do contato iniciando conversa (modelo) ✔, envio pelo Inbox ✔, rodízio de atribuição ✔ (evento "automação"), toque da Reativação para contato sem conversa ✔ (continua terminando em `no_conversation`, sem criar conversa), transmissão para número novo ✔ (não cria conversa), API v1 para número novo ✔, fluxo com entrega para atendente ✔ (evento "fluxo"), automação atribuindo atendente ✔ (evento "automação"), superadmin alterando conta ✔, remover membro pela tela ✔ (conversa aberta → Sem dono com evento), usuário apagado com conversa aberta ✔. 11/11, sem erro no log do servidor. O Inbox não tem botão de "nova conversa": conversa nova pela tela só nasce na página do contato.
+- **Corrigir o responsável à mão (admin, SQL Editor do Supabase):** a troca direta (`UPDATE conversations SET assigned_agent_id = …`) agora é recusada com `assignee changes must go through transfer_conversation`. Use a função com evento — ela valida o destino (mesma conta, não só visualização), grava a linha na conversa e notifica quem recebe:
+  ```sql
+  -- 1) achar a conversa (pelo telefone do contato)
+  select v.id, c.name, v.status, v.assigned_agent_id
+    from conversations v join contacts c on c.id = v.contact_id
+   where c.phone like '%11999990000';
+
+  -- 2) atribuir / transferir (p_actor_user_id = o user_id de quem está corrigindo; a observação vira nota interna)
+  select * from record_assignment_event(
+    '<id da conversa>', '<user_id do novo responsável>', 'user',
+    '<seu user_id>', 'Correção manual: motivo');
+
+  -- 3) tirar o responsável (volta para Sem dono)
+  select * from record_assignment_event('<id da conversa>', null, 'user', '<seu user_id>', null);
+  ```
+  Destino de outra conta ou só visualização é recusado (`22023`, com o motivo). Para várias conversas de uma vez, repita a chamada por conversa (ou use `conversations_bulk_assign` logado como o usuário).
 - **Commit/branch:** `feat/inbox-filtros-notas`, PR #7.
 - **Pendências / riscos:**
   - Ao implantar: aplicar 057–060 em ordem (o backfill da 057 calcula a espera das conversas existentes).
