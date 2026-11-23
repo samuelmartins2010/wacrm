@@ -50,16 +50,20 @@ $$;
 create function pg_temp.assignee(conv uuid) returns uuid language sql as $$
   select assigned_agent_id from conversations where id = conv
 $$;
+-- 060: o responsável só muda com evento; os testes atribuem pela função interna.
+create function pg_temp.assign(conv uuid, uid uuid) returns void language sql as $$
+  select _assign_with_event(conv, uid, 'user', null, null)
+$$;
 grant execute on all functions in schema pg_temp to authenticated, service_role;
 
--- ── UPDATE / INSERT direto (tela, API, fluxo, I.A) ──────────────────
+-- ── Quem pode ser responsável (vale em todos os caminhos) ───────────
+-- A validação da 059 roda antes da trava da 060, então UPDATE direto para
+-- um destino inválido ainda mostra o motivo específico.
 select lives_ok(
-  $$ update conversations set assigned_agent_id = '00000000-0000-0000-0000-0000000000f2'
-      where id = '00000000-0000-0000-0000-00000000f001' $$,
+  $$ select pg_temp.assign('00000000-0000-0000-0000-00000000f001', '00000000-0000-0000-0000-0000000000f2') $$,
   'atendente da conta pode ser responsável');
 select lives_ok(
-  $$ update conversations set assigned_agent_id = '00000000-0000-0000-0000-0000000000f1'
-      where id = '00000000-0000-0000-0000-00000000f001' $$,
+  $$ select pg_temp.assign('00000000-0000-0000-0000-00000000f001', '00000000-0000-0000-0000-0000000000f1') $$,
   'dono da conta pode ser responsável');
 select throws_ok(
   $$ update conversations set assigned_agent_id = '00000000-0000-0000-0000-0000000000f3'
@@ -78,9 +82,9 @@ select throws_ok(
   '22023', 'assignee is not a member of this account',
   'conversa nova com responsável de outra conta é recusada (INSERT)');
 select lives_ok(
-  $$ update conversations set assigned_agent_id = null
-      where id = '00000000-0000-0000-0000-00000000f001' $$,
+  $$ select pg_temp.assign('00000000-0000-0000-0000-00000000f001', null) $$,
   'remover o responsável continua permitido');
+delete from conversation_events where conversation_id = '00000000-0000-0000-0000-00000000f001';
 
 -- Pelo cliente logado (é o caminho da tela de hoje)
 select pg_temp.act_as('00000000-0000-0000-0000-0000000000f1');
@@ -138,8 +142,8 @@ select throws_ok(
 -- p_only_if_unassigned: só atribui se, com a linha travada, ainda não há
 -- responsável (a I.A leu a conversa segundos antes de chamar).
 select pg_temp.as_postgres();
-update conversations set assigned_agent_id = '00000000-0000-0000-0000-0000000000f1'
- where id = '00000000-0000-0000-0000-00000000f003';
+select pg_temp.assign('00000000-0000-0000-0000-00000000f003', '00000000-0000-0000-0000-0000000000f1');
+delete from conversation_events where conversation_id = '00000000-0000-0000-0000-00000000f003';
 select pg_temp.as_service();
 select is(
   (select record_assignment_event('00000000-0000-0000-0000-00000000f003', '00000000-0000-0000-0000-0000000000f2',
@@ -148,7 +152,7 @@ select is(
 select pg_temp.as_postgres();
 select is((select count(*) from conversation_events where conversation_id = '00000000-0000-0000-0000-00000000f003'),
   0::bigint, 'e não grava nota nem evento');
-update conversations set assigned_agent_id = null where id = '00000000-0000-0000-0000-00000000f003';
+select pg_temp.assign('00000000-0000-0000-0000-00000000f003', null);
 select pg_temp.as_service();
 select is(
   (select (record_assignment_event('00000000-0000-0000-0000-00000000f003', '00000000-0000-0000-0000-0000000000f2',
@@ -159,8 +163,8 @@ select is(
 -- A trava só olha a troca: uma conversa encerrada (que a 059 não mexe
 -- quando o papel muda) continua podendo ser editada.
 select pg_temp.as_postgres();
-update conversations set assigned_agent_id = '00000000-0000-0000-0000-0000000000f2', status = 'closed'
- where id = '00000000-0000-0000-0000-00000000f002';
+select pg_temp.assign('00000000-0000-0000-0000-00000000f002', '00000000-0000-0000-0000-0000000000f2');
+update conversations set status = 'closed' where id = '00000000-0000-0000-0000-00000000f002';
 update profiles set account_role = 'viewer' where user_id = '00000000-0000-0000-0000-0000000000f2';
 select lives_ok(
   $$ update conversations set unread_count = 0 where id = '00000000-0000-0000-0000-00000000f002' $$,

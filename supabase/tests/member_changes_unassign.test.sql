@@ -27,8 +27,8 @@ select '00000000-0000-0000-0000-00000000bc01', user_id, account_id, '+5511900000
   from profiles where user_id = '00000000-0000-0000-0000-0000000000b1';
 -- b0a1/b0a2: m2 aberta e pendente · b0a3: m2 encerrada
 -- b0b1: m3 aberta · b0b2: m3 encerrada · b0c1: m4 aberta
-insert into conversations (id, user_id, account_id, contact_id, status, assigned_agent_id)
-select v.id::uuid, c.user_id, c.account_id, c.id, v.st, v.agent::uuid
+insert into conversations (id, user_id, account_id, contact_id, status)
+select v.id::uuid, c.user_id, c.account_id, c.id, v.st
   from contacts c,
        (values ('00000000-0000-0000-0000-00000000b0a1', 'open',    '00000000-0000-0000-0000-0000000000b2'),
                ('00000000-0000-0000-0000-00000000b0a2', 'pending', '00000000-0000-0000-0000-0000000000b2'),
@@ -37,6 +37,13 @@ select v.id::uuid, c.user_id, c.account_id, c.id, v.st, v.agent::uuid
                ('00000000-0000-0000-0000-00000000b0b2', 'closed',  '00000000-0000-0000-0000-0000000000b3'),
                ('00000000-0000-0000-0000-00000000b0c1', 'open',    '00000000-0000-0000-0000-0000000000b4')) v(id, st, agent)
  where c.id = '00000000-0000-0000-0000-00000000bc01';
+-- 060: o responsável só muda com evento — atribui pela função e limpa os
+-- eventos da preparação (os asserts contam só o que vem depois)
+select _assign_with_event(v.id::uuid, v.agent::uuid, 'user', null, null)
+  from (values ('00000000-0000-0000-0000-00000000b0a1', '00000000-0000-0000-0000-0000000000b2'), ('00000000-0000-0000-0000-00000000b0a2', '00000000-0000-0000-0000-0000000000b2'),
+               ('00000000-0000-0000-0000-00000000b0a3', '00000000-0000-0000-0000-0000000000b2'), ('00000000-0000-0000-0000-00000000b0b1', '00000000-0000-0000-0000-0000000000b3'),
+               ('00000000-0000-0000-0000-00000000b0b2', '00000000-0000-0000-0000-0000000000b3'), ('00000000-0000-0000-0000-00000000b0c1', '00000000-0000-0000-0000-0000000000b4')) v(id, agent);
+delete from conversation_events where conversation_id in (select id from conversations where contact_id = '00000000-0000-0000-0000-00000000bc01');
 
 create function pg_temp.act_as(uid uuid) returns void language sql as $$
   select set_config('request.jwt.claims', json_build_object('sub', uid, 'role', 'authenticated')::text, true);

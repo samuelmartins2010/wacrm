@@ -27,8 +27,8 @@ select '00000000-0000-0000-0000-00000000dc01', user_id, account_id, '+5511900000
   from profiles where user_id = '00000000-0000-0000-0000-0000000000d1';
 -- X: com r2 · Y: com r3 (vira viewer) · Z: com r4 (sai da conta)
 -- W: aberta · V: handoff (D7) · U: pausa manual da I.A · T: sem dono
-insert into conversations (id, user_id, account_id, contact_id, status, assigned_agent_id)
-select v.id::uuid, c.user_id, c.account_id, c.id, 'open', v.agent::uuid
+insert into conversations (id, user_id, account_id, contact_id, status)
+select v.id::uuid, c.user_id, c.account_id, c.id, 'open'
   from contacts c,
        (values ('00000000-0000-0000-0000-00000000d0a1', '00000000-0000-0000-0000-0000000000d2'),
                ('00000000-0000-0000-0000-00000000d0a2', '00000000-0000-0000-0000-0000000000d3'),
@@ -38,6 +38,12 @@ select v.id::uuid, c.user_id, c.account_id, c.id, 'open', v.agent::uuid
                ('00000000-0000-0000-0000-00000000d0a6', null),
                ('00000000-0000-0000-0000-00000000d0a7', null)) v(id, agent)
  where c.id = '00000000-0000-0000-0000-00000000dc01';
+-- 060: o responsável só muda com evento — atribui pela função e limpa os
+-- eventos da preparação (os asserts contam só o que vem depois)
+select _assign_with_event(v.id::uuid, v.agent::uuid, 'user', null, null)
+  from (values ('00000000-0000-0000-0000-00000000d0a1', '00000000-0000-0000-0000-0000000000d2'), ('00000000-0000-0000-0000-00000000d0a2', '00000000-0000-0000-0000-0000000000d3'),
+               ('00000000-0000-0000-0000-00000000d0a3', '00000000-0000-0000-0000-0000000000d4')) v(id, agent);
+delete from conversation_events where conversation_id in (select id from conversations where contact_id = '00000000-0000-0000-0000-00000000dc01');
 update conversations set status = 'closed'
  where id <> '00000000-0000-0000-0000-00000000d0a4'
    and contact_id = '00000000-0000-0000-0000-00000000dc01';
