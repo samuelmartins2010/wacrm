@@ -38,10 +38,11 @@ select is(automation_add_tag('00000000-0000-0000-0000-00000000c0a7', '00000000-0
 select is((select count(*)::int from automation_trigger_events where trigger_type = 'tag_added'), 2, 'nem gera evento de novo');
 
 -- atribuição
-update conversations set assigned_agent_id = '00000000-0000-0000-0000-0000000000a8' where id = '00000000-0000-0000-0000-00000000cca7';
+-- 060: a troca de responsável só passa pela função com evento
+select _assign_with_event('00000000-0000-0000-0000-00000000cca7', '00000000-0000-0000-0000-0000000000a8', 'user', null, null);
 select is((select context->>'agent_id' from automation_trigger_events where trigger_type = 'conversation_assigned'),
           '00000000-0000-0000-0000-0000000000a8', 'atribuir gera conversation_assigned');
-update conversations set assigned_agent_id = null where id = '00000000-0000-0000-0000-00000000cca7';
+select _assign_with_event('00000000-0000-0000-0000-00000000cca7', null, 'user', null, null);
 select is((select count(*)::int from automation_trigger_events where trigger_type = 'conversation_assigned'), 1,
           'desatribuir não gera evento');
 

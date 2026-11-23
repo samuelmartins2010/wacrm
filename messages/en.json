@@ -161,7 +161,36 @@
       "clearAll": "Clear all",
       "noConversations": "No conversations found",
       "noMessagesYet": "No messages yet",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "filterMine": "Mine",
+      "filterUnassigned": "Unassigned",
+      "filterAwaiting": "Awaiting",
+      "statusAll": "All statuses",
+      "statusLabel": "Status",
+      "quickFiltersLabel": "Quick filters",
+      "waitingTitle": "Time waiting for a reply",
+      "badgeAi": "🤖 AI handling",
+      "badgeFlow": "🤖 Flow in progress"
+    },
+    "transfer": {
+      "title": "Transfer to {name}",
+      "sameAssigneeTitle": "Note for {name}",
+      "sameAssigneeHint": "{name} is already the assignee. The note is saved as an internal note, with no new transfer.",
+      "noteLabel": "Internal note (optional)",
+      "notePlaceholder": "E.g.: customer wants a copy of the March invoice; ID already confirmed.",
+      "privateHint": "Only your team sees this. It is not sent to the customer.",
+      "notificationHint": "{name} sees the start of the note in the notification.",
+      "cancel": "Cancel",
+      "submit": "Transfer",
+      "submitNote": "Save note",
+      "submitting": "Transferring…",
+      "transferred": "Conversation transferred to {name}",
+      "noteSaved": "Note saved",
+      "unassigned": "Assignee removed",
+      "errorForbidden": "You don't have permission to transfer this conversation.",
+      "errorViewer": "This member has a view-only role and cannot be the assignee.",
+      "errorNotMember": "This member is no longer part of this account.",
+      "errorUnknown": "Couldn't change the assignee. Try again."
     },
     "messageThread": {
       "backToConversations": "Back to conversations",
@@ -221,7 +250,14 @@
       "send": "Send",
       "quickReplyNamePrompt": "Name this quick reply:",
       "quickReplySaved": "Saved as a quick reply.",
-      "quickReplySaveError": "Couldn't save the quick reply."
+      "quickReplySaveError": "Couldn't save the quick reply.",
+      "tabsLabel": "Reply or internal note",
+      "tabReply": "Reply",
+      "tabNote": "Internal note",
+      "saveNote": "Save note",
+      "noteHint": "Only your team sees this note",
+      "notePlaceholder": "Write a note for your team (the customer won’t see it)…",
+      "noteSaveError": "Couldn’t save the note."
     },
     "bubble": {
       "photo": "Photo",
@@ -291,6 +327,27 @@
       "resumed": "AI resumed.",
       "updateError": "Couldn’t update the AI assistant.",
       "networkError": "Couldn’t reach the server."
+    },
+    "wait": {
+      "now": "now",
+      "minutes": "{n} min",
+      "hours": "{n} h",
+      "days": "{n} d"
+    },
+    "events": {
+      "noteHeader": "Internal note · {author} · {time}",
+      "assigned": "{actor} assigned the conversation to {to}",
+      "transferred": "{actor} transferred from {from} to {to}",
+      "unassigned": "{actor} removed {from} as assignee",
+      "unassignedBySystem": "{from} lost access: conversation is unassigned again",
+      "reopened": "Reopened by the customer",
+      "actorAutomation": "Automation",
+      "actorFlow": "Flow",
+      "actorAi": "AI",
+      "actorSystem": "System",
+      "actorCustomer": "Customer",
+      "someone": "Someone",
+      "removedMember": "former member"
     }
   },
   "Contacts": {

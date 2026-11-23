@@ -98,6 +98,14 @@ export function canViewOnly(role: AccountRole): boolean {
   return role === "viewer";
 }
 
+/**
+ * Who can own (be the assignee of) a conversation: owner, admin or
+ * agent. Viewers can't — the database refuses it too (migration 059).
+ */
+export function canBeAssigned(role: AccountRole): boolean {
+  return hasMinRole(role, "agent");
+}
+
 /** Owner only: irreversible destructive operations. */
 export function canDeleteAccount(role: AccountRole): boolean {
   return role === "owner";

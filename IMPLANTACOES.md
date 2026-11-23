@@ -48,6 +48,48 @@ Checklist para tirar a produção da pausa (VPS + Supabase cloud). Siga na ordem
 
 ---
 
+## 2026-11-23: Inbox com filtros, nota interna e transferência com observação
+- **Origem:** item 1 do Grupo A (spec `docs/superpowers/specs/2026-11-19-inbox-filtros-transferencia-design.md`, plano `docs/superpowers/plans/2026-11-19-inbox-filtros-notas-transferencia.md`), com os ajustes A, C, D, E, G e H do Samuel.
+- **O que mudou:**
+  - **Filtros rápidos** Todas / Minhas / Sem dono / Aguardando / Não lidas, com contadores, aplicados no banco (a lista lê até 1.000 conversas) e mantidos em tempo real; Status (Abertas/Pendentes/Fechadas) separado; filtro lembrado no navegador.
+  - **Aguardando** = desde quando o cliente espera resposta **humana**: só a resposta de um atendente zera; I.A, automação, fluxo e API v1 não zeram; resposta que falha devolve a espera; encerrar zera. Tempo de espera na linha (até 15 min neutro, até 1 h amarelo, depois vermelho) e "Aguardando" ordena por quem espera há mais tempo.
+  - **Selos** "🤖 I.A atendendo" (mesma regra que o auto-reply usa) e "🤖 Fluxo em andamento" (execução ativa e não vencida); nunca em conversa encerrada.
+  - **Nota interna** no composer (aba amarela, até 2.000 caracteres, só a equipe vê) e **linha do tempo** com notas, atribuições, transferências, remoções, "reaberta pelo cliente" e responsável tirado pelo sistema.
+  - **Transferir com observação:** escolher um membro abre o diálogo (destino no título); nota + troca na mesma transação; o novo responsável vê o início da observação na notificação. Fluxo, I.A, banner da I.A ("Assumir"/"Retomar I.A"), automação e atribuição em massa também registram a troca.
+  - **Regras do responsável:** só dono/admin/atendente da conta (nunca de outra conta nem só visualização); mensagem do cliente numa conversa encerrada **reabre** a conversa e começa a espera (responsável que saiu ou só visualiza → Sem dono); remover um membro ou mudar o papel para só visualização devolve as conversas abertas dele para Sem dono; o handoff da I.A não passa por cima de quem acabou de assumir; o responsável **só muda junto com um evento** (UPDATE direto é recusado, inclusive para service role).
+- **Banco (migrations):** `057_inbox_awaiting` (`awaiting_since`, `closed_at`, `sent_via_api`, triggers, `inbox_filter_counts()`), `058_conversation_events` (tabela + RLS só leitura para membros + funções `transfer_conversation`, `add_conversation_note`, `record_assignment_event`), `059_conversation_assignee_rules` (validação do responsável, reabertura pelo cliente, perda de acesso, `p_only_if_unassigned`), `060_conversation_assignee_event_only` (trava). Nenhuma apaga dados; 057 faz backfill da espera.
+- **Arquivos principais:** `src/lib/inbox/` (`filters`, `badges`, `timeline`, `notes`, `transfer`), `src/components/inbox/` (`conversation-list`, `message-thread`, `conversation-event`, `note-composer`, `transfer-dialog`), `src/hooks/use-inbox-counts.ts`, `src/hooks/use-inbox-badges.ts`, `src/lib/ai/auto-reply.ts`, `src/lib/flows/engine.ts`, `src/app/api/ai/autoreply/[conversationId]/route.ts`, `src/lib/automations/{engine,references}.ts`, `src/app/api/v1/messages/route.ts`.
+- **Como foi testado:**
+  - Suíte: vitest 1005/1005, typecheck, lint (0 erros), i18n:check, pgTAP 14 arquivos / 193 asserts (cada regra nova com teste que falhou antes), build.
+  - Revisões independentes (subagente) das tarefas 2, 5 e 8: aprovadas com ajustes, todos feitos.
+  - Ponta a ponta local (23/11/2026; dev com proxy falso da Meta e da OpenAI, saída externa bloqueada, `REACTIVATION_DRY_RUN=true`): webhook assinado de contato novo → conversa em Aguardando e Sem dono, contadores subiram sem recarregar, selo da I.A; I.A respondeu pelo proxy e a API v1 mandou mensagem → continuou em Aguardando; contato em fluxo com o selo de fluxo; atendente respondeu pelo Inbox → saiu de Aguardando e o contador caiu sem recarregar; nota interna apareceu sem nenhuma chamada à Meta e sem mudar a última mensagem; transferência com observação para outra atendente → linha + nota, notificação com o texto e automação "conversa atribuída" rodou (etiqueta aplicada). Dados apagados; banco de volta à base (4 contatos / 4 conversas / 7 mensagens).
+  - Caminhos que criam conversa ou definem responsável, testados rodando depois da 060 (23/11/2026, banco local + dev com proxy falso): página do contato iniciando conversa (modelo) ✔, envio pelo Inbox ✔, rodízio de atribuição ✔ (evento "automação"), toque da Reativação para contato sem conversa ✔ (continua terminando em `no_conversation`, sem criar conversa), transmissão para número novo ✔ (não cria conversa), API v1 para número novo ✔, fluxo com entrega para atendente ✔ (evento "fluxo"), automação atribuindo atendente ✔ (evento "automação"), superadmin alterando conta ✔, remover membro pela tela ✔ (conversa aberta → Sem dono com evento), usuário apagado com conversa aberta ✔. 11/11, sem erro no log do servidor. O Inbox não tem botão de "nova conversa": conversa nova pela tela só nasce na página do contato.
+- **Corrigir o responsável à mão (admin, SQL Editor do Supabase):** a troca direta (`UPDATE conversations SET assigned_agent_id = …`) agora é recusada com `assignee changes must go through transfer_conversation`. Use a função com evento — ela valida o destino (mesma conta, não só visualização), grava a linha na conversa e notifica quem recebe:
+  ```sql
+  -- 1) achar a conversa (pelo telefone do contato)
+  select v.id, c.name, v.status, v.assigned_agent_id
+    from conversations v join contacts c on c.id = v.contact_id
+   where c.phone like '%11999990000';
+
+  -- 2) atribuir / transferir (p_actor_user_id = o user_id de quem está corrigindo; a observação vira nota interna)
+  select * from record_assignment_event(
+    '<id da conversa>', '<user_id do novo responsável>', 'user',
+    '<seu user_id>', 'Correção manual: motivo');
+
+  -- 3) tirar o responsável (volta para Sem dono)
+  select * from record_assignment_event('<id da conversa>', null, 'user', '<seu user_id>', null);
+  ```
+  Destino de outra conta ou só visualização é recusado (`22023`, com o motivo). Para várias conversas de uma vez, repita a chamada por conversa (ou use `conversations_bulk_assign` logado como o usuário).
+- **Commit/branch:** `feat/inbox-filtros-notas`, PR #7.
+- **Pendências / riscos:**
+  - Ao implantar: aplicar 057–060 em ordem (o backfill da 057 calcula a espera das conversas existentes).
+  - Conversas que hoje têm responsável de outra conta ou só visualização continuam como estão até a próxima troca (a 059 só valida mudanças).
+  - Acabamentos da revisão da tarefa 8 não feitos: contador de caracteres conta em UTF-16 (mais restritivo que o banco com emojis), o diálogo esvazia antes da animação de fechar, classificação de erro depende do texto da mensagem do banco (fixado pelos testes pgTAP).
+  - Visto no ponta a ponta, já existia antes: eventos de "conversa atribuída" que ficaram na fila são processados por uma automação ativada depois deles; o painel do contato não atualiza etiquetas em tempo real.
+  - Lista de fluxos ativos do selo lê até 1.000 execuções.
+
+---
+
 ## 2026-11-19: Transmissões com mais de 1.000 contatos e mais de 50 por minuto
 - **Origem:** bug "Todos os contatos" sem paginação (pedido do Samuel), branch `fix/broadcast-paginacao`.
 - **O que mudou:**
@@ -59,6 +101,8 @@ Checklist para tirar a produção da pausa (VPS + Supabase cloud). Siga na ordem
 - **Como testar:** `npx vitest run src/lib/broadcasts src/lib/rate-limit.test.ts` (banco falso que corta em 1.000 linhas e recusa `in` grande; 429 seguido de 200). Ponta a ponta local feito em 2026-11-19: ver o PR.
 - **Commit/branch:** `fix/broadcast-paginacao`.
 - **Pendências / riscos:** o envio continua rodando no navegador (fechar a aba no meio interrompe; já era assim). O limitador é em memória por processo (ok para a VPS única).
+
+---
 
 ## 2026-11-19: Reativação não espera fluxo vencido (D11 + F8)
 - **Origem:** pedido do Samuel depois do PR #2.

@@ -161,7 +161,36 @@
       "clearAll": "Limpar tudo",
       "noConversations": "Nenhuma conversa encontrada",
       "noMessagesYet": "Ainda não há mensagens",
-      "unknown": "Desconhecido"
+      "unknown": "Desconhecido",
+      "filterMine": "Minhas",
+      "filterUnassigned": "Sem dono",
+      "filterAwaiting": "Aguardando",
+      "statusAll": "Todos os status",
+      "statusLabel": "Status",
+      "quickFiltersLabel": "Filtros rápidos",
+      "waitingTitle": "Tempo esperando resposta",
+      "badgeAi": "🤖 I.A atendendo",
+      "badgeFlow": "🤖 Fluxo em andamento"
+    },
+    "transfer": {
+      "title": "Transferir para {name}",
+      "sameAssigneeTitle": "Observação para {name}",
+      "sameAssigneeHint": "{name} já é o responsável. A observação vira uma nota interna, sem nova transferência.",
+      "noteLabel": "Observação interna (opcional)",
+      "notePlaceholder": "Ex.: cliente quer a 2ª via do boleto de março; já confirmei o CPF.",
+      "privateHint": "Só a equipe vê. Não é enviada ao cliente.",
+      "notificationHint": "{name} vê o início da observação na notificação.",
+      "cancel": "Cancelar",
+      "submit": "Transferir",
+      "submitNote": "Salvar nota",
+      "submitting": "Transferindo…",
+      "transferred": "Conversa transferida para {name}",
+      "noteSaved": "Nota salva",
+      "unassigned": "Responsável removido",
+      "errorForbidden": "Você não tem permissão para transferir esta conversa.",
+      "errorViewer": "Esse membro só tem acesso de visualização e não pode ser responsável.",
+      "errorNotMember": "Esse membro não faz mais parte desta conta.",
+      "errorUnknown": "Não foi possível alterar o responsável. Tente de novo."
     },
     "messageThread": {
       "backToConversations": "Voltar para conversas",
@@ -221,7 +250,14 @@
       "send": "Enviar",
       "quickReplyNamePrompt": "Dê um nome a esta resposta rápida:",
       "quickReplySaved": "Salva como resposta rápida.",
-      "quickReplySaveError": "Não foi possível salvar a resposta rápida."
+      "quickReplySaveError": "Não foi possível salvar a resposta rápida.",
+      "tabsLabel": "Responder ou nota interna",
+      "tabReply": "Responder",
+      "tabNote": "Nota interna",
+      "saveNote": "Salvar nota",
+      "noteHint": "Só a equipe vê esta nota",
+      "notePlaceholder": "Escreva uma nota para a equipe (o cliente não vê)…",
+      "noteSaveError": "Não foi possível salvar a nota."
     },
     "bubble": {
       "photo": "Foto",
@@ -291,6 +327,27 @@
       "resumed": "IA retomada.",
       "updateError": "Não foi possível atualizar o assistente de IA.",
       "networkError": "Não foi possível acessar o servidor."
+    },
+    "wait": {
+      "now": "agora",
+      "minutes": "{n} min",
+      "hours": "{n} h",
+      "days": "{n} d"
+    },
+    "events": {
+      "noteHeader": "Nota interna · {author} · {time}",
+      "assigned": "{actor} atribuiu a conversa a {to}",
+      "transferred": "{actor} transferiu de {from} para {to}",
+      "unassigned": "{actor} removeu {from} como responsável",
+      "unassignedBySystem": "{from} perdeu o acesso: conversa voltou para Sem dono",
+      "reopened": "Reaberta pelo cliente",
+      "actorAutomation": "Automação",
+      "actorFlow": "Fluxo",
+      "actorAi": "I.A",
+      "actorSystem": "Sistema",
+      "actorCustomer": "Cliente",
+      "someone": "Alguém",
+      "removedMember": "ex-membro"
     }
   },
   "Contacts": {

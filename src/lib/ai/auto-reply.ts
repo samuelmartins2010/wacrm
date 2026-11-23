@@ -1,3 +1,4 @@
+import { aiHandlesConversation } from '@/lib/inbox/badges'
 import { supabaseAdmin } from './admin-client'
 import { loadAiConfig } from './config'
 import { buildConversationContext } from './context'
@@ -65,16 +66,23 @@ export async function dispatchInboundToAiReply(
       .eq('is_active', true)
       .in('trigger_type', ['new_message_received', 'keyword_match'])
       .limit(1)
-    if (autoResponders && autoResponders.length > 0) return
-
     const { data: conv, error: convErr } = await db
       .from('conversations')
-      .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count')
+      .select('status, assigned_agent_id, ai_autoreply_disabled, bot_handoff_at, ai_reply_count')
       .eq('id', conversationId)
       .maybeSingle()
     if (convErr || !conv) return
-    if (conv.assigned_agent_id) return // a human owns this thread
-    if (conv.ai_autoreply_disabled) return // handed off / turned off here
+    // Mesma regra do selo "🤖 I.A atendendo" no Inbox (lib/inbox/badges).
+    if (
+      !aiHandlesConversation({
+        aiActive: config.isActive,
+        autoReplyEnabled: config.autoReplyEnabled,
+        autoRespondersActive: !!autoResponders && autoResponders.length > 0,
+        conversation: conv,
+      })
+    ) {
+      return
+    }
     // Cheap early-out; the authoritative cap check is the atomic claim
     // below (this read can race a concurrent inbound).
     if (conv.ai_reply_count >= config.autoReplyMaxPerConversation) return
@@ -144,16 +152,34 @@ export async function dispatchInboundToAiReply(
         messages,
         replyCount: conv.ai_reply_count ?? 0,
       })
-      const update: Record<string, unknown> = {
-        ai_autoreply_disabled: true,
-        ai_handoff_summary: summary,
-      }
+      await db
+        .from('conversations')
+        .update({ ai_autoreply_disabled: true, ai_handoff_summary: summary })
+        .eq('id', conversationId)
       // Only set the assignee when a target is configured AND the thread
       // isn't already owned — never stomp an existing human assignment.
+      // Goes through the RPC so the change lands in conversation_events
+      // with the summary as its note. Best-effort: a refused assignee
+      // (other account / view-only) is logged, the handoff stands.
       if (config.handoffAgentId && !conv.assigned_agent_id) {
-        update.assigned_agent_id = config.handoffAgentId
+        const { error: assignErr } = await db.rpc('record_assignment_event', {
+          p_conversation_id: conversationId,
+          p_to_user_id: config.handoffAgentId,
+          p_actor_kind: 'ai',
+          p_actor_user_id: null,
+          p_note: summary,
+          // A leitura de `conv` é de antes da chamada ao modelo: se um
+          // atendente assumiu nesse meio-tempo, o banco (linha travada)
+          // não deixa a I.A passar por cima.
+          p_only_if_unassigned: true,
+        })
+        if (assignErr) {
+          console.error(
+            '[ai auto-reply] record_assignment_event failed:',
+            assignErr,
+          )
+        }
       }
-      await db.from('conversations').update(update).eq('id', conversationId)
       return
     }
 

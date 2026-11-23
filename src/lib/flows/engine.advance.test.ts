@@ -203,3 +203,65 @@ describe("stale active run found by a new inbound (F8)", () => {
     expect(writes.runUpdates).toHaveLength(0);
   });
 });
+
+describe("handoff records the assignee change (conversation_events)", () => {
+  const { handleReplyForActiveRun } = __flowEngineTest;
+
+  function withRpc(error: { message: string } | null = null) {
+    const fake = fakeFlowDb();
+    const rpc = vi.fn(async () => ({ data: null, error }));
+    Object.assign(fake.db, { rpc });
+    return { ...fake, rpc };
+  }
+
+  it("handoff node with assign_to: update has no assigned_agent_id and record_assignment_event is called", async () => {
+    const { db, writes, rpc } = withRpc();
+    const nodes = nodeMap(node("start", "start", { next_node_key: "h" }), node("h", "handoff", { assign_to: "agent-1" }));
+    const r = await advanceFromNodeKey(db as never, run(), "start", nodes);
+    expect(r.outcome).toBe("handed_off");
+    expect(writes.conversationUpdates.length).toBeGreaterThan(0);
+    for (const u of writes.conversationUpdates) expect(u).not.toHaveProperty("assigned_agent_id");
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith("record_assignment_event", {
+      p_conversation_id: "conv",
+      p_to_user_id: "agent-1",
+      p_actor_kind: "flow",
+      p_actor_user_id: null,
+      p_note: null,
+    });
+  });
+
+  it("handoff without assign_to does not call the RPC", async () => {
+    const { db, writes, rpc } = withRpc();
+    const nodes = nodeMap(node("start", "start", { next_node_key: "h" }), node("h", "handoff", {}));
+    await advanceFromNodeKey(db as never, run(), "start", nodes);
+    expect(rpc).not.toHaveBeenCalledWith("record_assignment_event", expect.anything());
+    expect(writes.runUpdates.at(-1)).toMatchObject({ status: "handed_off" });
+  });
+
+  it("fallback exhausted (no assignee) does not call the RPC", async () => {
+    const fake = fakeFlowDb({ flows: { fallback_policy: { on_unknown_reply: "reprompt", max_reprompts: 2, on_timeout_hours: 24, on_exhaust: "handoff" } } });
+    const rpc = vi.fn(async () => ({ data: null, error: null }));
+    Object.assign(fake.db, { rpc });
+    const nodes = nodeMap(node("menu", "send_buttons", { text: "?", buttons: [{ reply_id: "a", title: "A", next_node_key: "menu" }] }));
+    await handleReplyForActiveRun(
+      fake.db as never,
+      run({ current_node_key: "menu", reprompt_count: 2 }),
+      { kind: "text", text: "quero humano", meta_message_id: "wamid.h" } as never,
+      nodes,
+    );
+    expect(rpc).not.toHaveBeenCalledWith("record_assignment_event", expect.anything());
+  });
+
+  it("an RPC error is logged and the run still ends handed_off", async () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { db, writes, rpc } = withRpc({ message: "assignee is not a member of this account" });
+    const nodes = nodeMap(node("start", "start", { next_node_key: "h" }), node("h", "handoff", { assign_to: "agent-x" }));
+    const r = await advanceFromNodeKey(db as never, run(), "start", nodes);
+    expect(rpc).toHaveBeenCalledWith("record_assignment_event", expect.objectContaining({ p_to_user_id: "agent-x" }));
+    expect(r.outcome).toBe("handed_off");
+    expect(writes.runUpdates.at(-1)).toMatchObject({ status: "handed_off", end_reason: "handoff_node" });
+    expect(err).toHaveBeenCalled();
+    err.mockRestore();
+  });
+});

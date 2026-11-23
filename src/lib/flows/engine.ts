@@ -427,7 +427,8 @@ async function sendListAndSuspend(
 
 /**
  * Hand a run over to a human: conversation → pending (optionally
- * assigned) and the run ends as handed_off with `reason`.
+ * assigned via `record_assignment_event`) and the run ends as handed_off
+ * with `reason`.
  */
 async function handOffRun(
   db: AdminClient,
@@ -445,8 +446,20 @@ async function handOffRun(
       bot_handoff_at: now,
       updated_at: now,
     };
-    if (assignTo) convUpdate.assigned_agent_id = assignTo;
     await db.from("conversations").update(convUpdate).eq("id", run.conversation_id);
+    if (assignTo) {
+      // The assignee change goes through the RPC so it lands in
+      // conversation_events (migration 058). Best-effort: a refused
+      // assignee must not keep the run from ending as handed_off.
+      const { error } = await db.rpc("record_assignment_event", {
+        p_conversation_id: run.conversation_id,
+        p_to_user_id: assignTo,
+        p_actor_kind: "flow",
+        p_actor_user_id: null,
+        p_note: null,
+      });
+      if (error) console.error("[flows] record_assignment_event failed:", error);
+    }
   }
   await endRun(db, run.id, "handed_off", reason);
 }

@@ -115,9 +115,9 @@ export function AiThreadBanner({
         setPaused(paused);
         onChange?.({
           ai_autoreply_disabled: paused,
-          // Take over assigns to the acting agent; resume releases only
-          // the caller's own assignment. The realtime UPDATE reconciles
-          // the exact value either way.
+          // Take over assigns to the acting agent; resume releases ANY
+          // assignee (the route unassigns so the bot isn't blocked). The
+          // realtime UPDATE reconciles the exact value either way.
           ...(paused
             ? currentUserId
               ? { assigned_agent_id: currentUserId }
