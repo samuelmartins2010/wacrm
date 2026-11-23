@@ -13,13 +13,14 @@ export function aiHandlesConversation(args: {
   autoReplyEnabled: boolean
   autoRespondersActive: boolean
   // Aceita null: é o que o banco devolve (o tipo Conversation usa undefined).
-  conversation: { [K in 'assigned_agent_id' | 'ai_autoreply_disabled' | 'bot_handoff_at']?: Conversation[K] | null }
+  conversation: { [K in 'status' | 'assigned_agent_id' | 'ai_autoreply_disabled' | 'bot_handoff_at']?: Conversation[K] | null }
 }): boolean {
   const c = args.conversation
   return (
     args.aiActive &&
     args.autoReplyEnabled &&
     !args.autoRespondersActive &&
+    c.status !== 'closed' && // encerrada não é atendida (o cliente escrevendo reabre antes — 059)
     !c.assigned_agent_id && // um humano é o responsável
     !c.ai_autoreply_disabled && // pausada à mão ou depois de um handoff
     !c.bot_handoff_at // D7: robôs em silêncio até encerrar/reabrir

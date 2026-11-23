@@ -68,7 +68,7 @@ export async function dispatchInboundToAiReply(
       .limit(1)
     const { data: conv, error: convErr } = await db
       .from('conversations')
-      .select('assigned_agent_id, ai_autoreply_disabled, bot_handoff_at, ai_reply_count')
+      .select('status, assigned_agent_id, ai_autoreply_disabled, bot_handoff_at, ai_reply_count')
       .eq('id', conversationId)
       .maybeSingle()
     if (convErr || !conv) return

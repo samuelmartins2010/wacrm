@@ -22,6 +22,10 @@ describe('aiHandlesConversation (mesma regra do auto-reply)', () => {
     expect(
       aiHandlesConversation({ ...base, conversation: { ...base.conversation, bot_handoff_at: '2026-11-21T10:00:00Z' } }),
     ).toBe(false)
+    // encerrada: quando o cliente escreve ela reabre antes (059), então a
+    // I.A nunca atende uma conversa encerrada — o selo não pode prometer
+    expect(aiHandlesConversation({ ...base, conversation: { ...base.conversation, status: 'closed' } })).toBe(false)
+    expect(aiHandlesConversation({ ...base, conversation: { ...base.conversation, status: 'pending' } })).toBe(true)
   })
 })
 
