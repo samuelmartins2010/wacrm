@@ -238,7 +238,7 @@
 - [ ] **Step 1: Teste**: extrair `export async function transferConversation(supabase, conversationId: string, toUserId: string | null, note: string): Promise<void>` em `src/lib/inbox/transfer.ts` e testar com cliente falso: chama `rpc('transfer_conversation', { p_conversation_id, p_to_user_id, p_note: null })` quando a observação é vazia/só espaços e `p_note: 'texto'` aparado quando não; lança erro quando a RPC devolve erro; chama `pingAutomationEvents()` (`src/lib/automations/ping.ts`) só quando `toUserId` não é nulo e a RPC deu certo.
 - [ ] **Step 2: Rodar e ver falhar** · `TZ=UTC LC_ALL=en_US.UTF-8 npx vitest run src/lib/inbox/transfer.test.ts` · Expected: FAIL.
 - [ ] **Step 3: Implementar** `transfer.ts`; o menu: escolher membro abre o diálogo (spec 5.4, contador de caracteres até 2.000); "Remover responsável" chama `transferConversation(..., null, '')` sem diálogo; erro mostra toast traduzido. O `update` direto de `assigned_agent_id` sai de `message-thread.tsx`.
-- [ ] **Step 4: Verificar** · `npx vitest run`, `npm run typecheck`, `npm run lint`, `npm run i18n:check`; `grep -rn "assigned_agent_id:" src/components` não acha gravação direta · Expected: passa, grep vazio.
+- [ ] **Step 4: Verificar** · `npx vitest run`, `npm run typecheck`, `npm run lint`, `npm run i18n:check`; nenhuma gravação direta de `assigned_agent_id` no banco: `grep -rn "assigned_agent_id" src --include=*.ts --include=*.tsx | grep -v "\.test\."` só pode achar leitura, filtro ou estado local da tela (hoje: `ai-thread-banner.tsx` e `inbox/page.tsx` atualizam o estado depois da RPC; `types`, `filters`, `badges`, `auto-reply` e `api/v1/conversations` só leem) — nenhum `.update(...)`/`.insert(...)` com o campo · Expected: passa.
 - [ ] **Step 5: Commit** `feat(inbox): transferir conversa com observação`
 
 ### Task 8b: Trava "troca de responsável só com evento" (migration 060)
@@ -247,7 +247,8 @@ Ajuste E do Samuel (20/11): depois da tarefa 8, quando nenhuma tela grava `assig
 
 - Create: `supabase/migrations/060_conversation_assignee_event_only.sql` — trigger em `conversations` que recusa mudar `assigned_agent_id` fora de `_assign_with_event` (marca de transação lida pelo trigger, como o `app.assignment_event_id`).
 - Test: `supabase/tests/assignee_event_only.test.sql` — UPDATE direto (logado e service_role) é recusado; transferência, automação, fluxo/I.A e em massa continuam funcionando e gravando evento.
-- Antes: `grep -rn "assigned_agent_id" src` sem gravação direta fora das RPCs.
+- Antes: o mesmo critério da tarefa 8 (nenhum `.update`/`.insert` com `assigned_agent_id` em `src`).
+- Ajustar os testes de banco que trocam o responsável por UPDATE direto (`assignee_guard`, `automation_trigger_events`, `conversation_reopen`): passam a usar as funções (ou o caminho de serviço permitido) — e um assert novo prova que o UPDATE direto é recusado.
 
 ### Task 9: Teste ponta a ponta local, registro e PR
 

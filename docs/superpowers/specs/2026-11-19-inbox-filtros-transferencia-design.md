@@ -137,20 +137,24 @@ O composer ganha duas abas:
 
 ### 5.4 Transferir com observação (decisões 4 e 5)
 
-No menu de responsável do topo da conversa, escolher um membro abre:
+No menu de responsável do topo da conversa, escolher um membro abre o diálogo **já com o destino escolhido**: o nome vai no título e não há campo "Para" dentro do diálogo (decisão do Samuel, 23/11/2026; para trocar o destino, cancela e escolhe outro no menu).
 
 ```
-┌ Transferir conversa ───────────────────────┐
-│ Para:  ( Bruno Lima            ▾ )          │
-│ Observação interna (opcional)               │
-│ ┌─────────────────────────────────────────┐ │
-│ │ Cliente quer 2ª via do boleto de março; │ │
-│ │ já confirmei o CPF.                     │ │
-│ └─────────────────────────────────────────┘ │
-│ 🔒 Só a equipe vê. Não é enviada ao cliente.│
-│                       [Cancelar] [Transferir]│
-└─────────────────────────────────────────────┘
+┌ Transferir para Bruno Lima ──────────────── ✕ ┐
+│ Observação interna (opcional)                  │
+│ ┌────────────────────────────────────────────┐ │
+│ │ Cliente quer 2ª via do boleto de março;    │ │
+│ │ já confirmei o CPF.                        │ │
+│ └────────────────────────────────────────────┘ │
+│ 🔒 Só a equipe vê. Não é enviada ao cliente.  73/2000 │
+│ 🔔 Bruno Lima vê o início da observação na notificação. │
+│                          [Cancelar] [Transferir]│
+└────────────────────────────────────────────────┘
 ```
+
+- Escolher **quem já é o responsável** abre "Observação para Bruno Lima": a observação vira só uma nota interna, sem nova transferência (botão "Salvar nota", desabilitado sem texto).
+- **Remover atribuição** não abre diálogo.
+- Enquanto envia, o diálogo não fecha (Esc, ✕ ou clique fora), para a observação não se perder se der erro.
 
 - **Transferir com observação = nota interna + troca de responsável, na mesma transação** (`transfer_conversation`, 5.6). Ou acontece tudo, ou nada.
 - Na linha do tempo aparecem juntos: a linha de sistema `🔁 Ana transferiu para Bruno · 14:32` e, logo abaixo, o cartão da nota com a observação.
