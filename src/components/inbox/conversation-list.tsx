@@ -1,15 +1,27 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   CONVERSATION_SELECT,
   matchesContactFilters,
   normalizeConversations,
 } from "@/lib/inbox/conversations";
+import {
+  applyQuickFilter,
+  compareAwaiting,
+  formatWait,
+  matchesInboxFilter,
+  waitBand,
+  type InboxQuickFilter,
+} from "@/lib/inbox/filters";
+import { aiHandlesConversation, conversationBadge } from "@/lib/inbox/badges";
+import { useAuth } from "@/hooks/use-auth";
+import { useInboxCounts, type InboxCounts } from "@/hooks/use-inbox-counts";
+import { useInboxBadges, type InboxBadgeContext } from "@/hooks/use-inbox-badges";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus, Tag } from "@/types";
-import { Search, ChevronDown, X } from "lucide-react";
+import { Search, ChevronDown, X, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
@@ -44,7 +56,54 @@ const STATUS_COLORS: Record<ConversationStatus, string> = {
 
 
 
-type InboxFilter = ConversationStatus | "all" | "unread";
+type StatusFilter = ConversationStatus | "all";
+
+const QUICK_FILTERS: InboxQuickFilter[] = ["all", "mine", "unassigned", "awaiting", "unread"];
+const QUICK_KEY = "inbox.quickFilter";
+const STATUS_KEY = "inbox.statusFilter";
+
+// Preferência do filtro por navegador; sem armazenamento (aba anônima,
+// bloqueado) a lista funciona igual, só não lembra.
+function readPref<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  try {
+    const v = window.localStorage.getItem(key);
+    return v && (allowed as readonly string[]).includes(v) ? (v as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function writePref(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // sem armazenamento: ignora
+  }
+  prefListeners.forEach((l) => l());
+}
+
+// Preferência como store externo: no servidor (e na hidratação) vale o
+// padrão; no navegador, o que estiver salvo.
+const prefListeners = new Set<() => void>();
+function subscribePref(listener: () => void) {
+  prefListeners.add(listener);
+  return () => {
+    prefListeners.delete(listener);
+  };
+}
+function useStoredPref<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  return useSyncExternalStore(
+    subscribePref,
+    () => readPref(key, allowed, fallback),
+    () => fallback,
+  );
+}
+const STATUS_FILTERS: readonly StatusFilter[] = ["all", "open", "pending", "closed"];
+
+const WAIT_CLASSES = {
+  neutral: "bg-muted text-muted-foreground",
+  warning: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+  danger: "bg-red-500/15 text-red-600 dark:text-red-400",
+} as const;
 
 export function ConversationList({
   activeConversationId,
@@ -54,18 +113,47 @@ export function ConversationList({
   resyncToken = 0,
 }: ConversationListProps) {
   const t = useTranslations("Inbox.conversationList");
-  
-  const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = useMemo(() => [
-    { label: t("filterAll"), value: "all" },
-    { label: t("filterUnread"), value: "unread" },
+  const tRoot = useTranslations();
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+
+  const QUICK_LABELS: Record<InboxQuickFilter, string> = useMemo(() => ({
+    all: t("filterAll"),
+    mine: t("filterMine"),
+    unassigned: t("filterUnassigned"),
+    awaiting: t("filterAwaiting"),
+    unread: t("filterUnread"),
+  }), [t]);
+
+  const STATUS_OPTIONS: { label: string; value: StatusFilter }[] = useMemo(() => [
+    { label: t("statusAll"), value: "all" },
     { label: t("filterOpen"), value: "open" },
     { label: t("filterPending"), value: "pending" },
     { label: t("filterClosed"), value: "closed" },
   ], [t]);
 
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<InboxFilter>("all");
-  const [loading, setLoading] = useState(true);
+  // Filtro rápido (no banco) + Status (separado). Começam em "all" e
+  // leem a preferência salva depois de montar (localStorage só existe
+  // no navegador).
+  const quick = useStoredPref(QUICK_KEY, QUICK_FILTERS, "all");
+  const status = useStoredPref(STATUS_KEY, STATUS_FILTERS, "all");
+  const chooseQuick = useCallback((f: InboxQuickFilter) => writePref(QUICK_KEY, f), []);
+  const chooseStatus = useCallback((f: StatusFilter) => writePref(STATUS_KEY, f), []);
+
+  const { counts, refresh: refreshCounts } = useInboxCounts();
+  const { context: badgeContext, refreshFlows } = useInboxBadges();
+
+  // Tempo de espera "anda" sozinho: re-render a cada minuto.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  // "Carregando" = a última busca concluída não é a do filtro atual.
+  const queryKey = `${quick}|${status}`;
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const loading = loadedKey !== queryKey;
   // Contact-based filters (issue #272). Tags use OR logic (a conversation
   // matches if its contact carries any selected tag), consistent with
   // Broadcast audience filtering. Company is an exact match on the field.
@@ -91,14 +179,18 @@ export function ConversationList({
   });
 
   useEffect(() => {
+    // "Minhas" precisa saber quem sou; espera o login carregar.
+    if (quick === "mine" && !userId) return;
     const supabase = createClient();
     let cancelled = false;
+    const key = `${quick}|${status}`;
 
     (async () => {
-      const { data, error } = await supabase
-        .from("conversations")
-        .select(CONVERSATION_SELECT)
-        .order("last_message_at", { ascending: false });
+      let query = supabase.from("conversations").select(CONVERSATION_SELECT);
+      if (status !== "all") query = query.eq("status", status);
+      query = applyQuickFilter(query, quick, userId ?? "");
+      if (quick !== "awaiting") query = query.order("last_message_at", { ascending: false });
+      const { data, error } = await query;
 
       if (cancelled) return;
 
@@ -110,12 +202,12 @@ export function ConversationList({
           hint: error.hint,
           code: error.code,
         });
-        setLoading(false);
+        setLoadedKey(key);
         return;
       }
 
       onConversationsLoadedRef.current(normalizeConversations(data ?? []));
-      setLoading(false);
+      setLoadedKey(key);
     })();
 
     return () => {
@@ -124,7 +216,16 @@ export function ConversationList({
     // `resyncToken` is included so the parent can force a refetch when
     // the realtime channel reconnects or the tab regains focus — catches
     // up on any events sent while the WS was disconnected or throttled.
-  }, [resyncToken]);
+    // Trocar de filtro também refaz a busca (o filtro roda no banco).
+  }, [resyncToken, quick, status, userId]);
+
+  // Qualquer mudança nas conversas (tempo real, troca de filtro) relê
+  // os contadores (com debounce de 1 s no hook) e os fluxos ativos.
+  useEffect(() => {
+    refreshCounts();
+    const id = setTimeout(() => void refreshFlows(), 1000);
+    return () => clearTimeout(id);
+  }, [conversations, refreshCounts, refreshFlows]);
 
   // Tag definitions for the filter picker — loaded once so labels/colours
   // stay stable regardless of which conversations happen to be loaded.
@@ -159,13 +260,13 @@ export function ConversationList({
   }, [tags]);
 
   const filtered = useMemo(() => {
-    let result = conversations;
-
-    if (filter === "unread") {
-      result = result.filter((c) => c.unread_count > 0);
-    } else if (filter !== "all") {
-      result = result.filter((c) => c.status === filter);
-    }
+    // A busca já veio filtrada do banco; aqui a mesma regra decide se um
+    // evento de tempo real faz a conversa entrar, ficar ou sair da lista.
+    let result = conversations.filter(
+      (c) =>
+        matchesInboxFilter(c, quick, userId ?? "") &&
+        (status === "all" || c.status === status),
+    );
 
     // Contact-based filters (tags via OR logic, exact company match).
     if (selectedTagIds.length > 0 || selectedCompany !== null) {
@@ -187,8 +288,10 @@ export function ConversationList({
       });
     }
 
+    if (quick === "awaiting") result = [...result].sort(compareAwaiting);
+
     return result;
-  }, [conversations, filter, search, selectedTagIds, selectedCompany]);
+  }, [conversations, quick, status, userId, search, selectedTagIds, selectedCompany]);
 
   const toggleTag = useCallback((id: string) => {
     setSelectedTagIds((prev) =>
@@ -217,7 +320,7 @@ export function ConversationList({
     [onSelect]
   );
 
-  const activeFilter = FILTER_OPTIONS.find((o) => o.value === filter);
+  const activeStatus = STATUS_OPTIONS.find((o) => o.value === status);
 
   return (
     // w-full on mobile so the list occupies the whole viewport when it's
@@ -236,23 +339,36 @@ export function ConversationList({
           />
         </div>
 
+        <QuickFilterChips
+          value={quick}
+          onChange={chooseQuick}
+          labels={QUICK_LABELS}
+          counts={counts}
+          ariaLabel={t("quickFiltersLabel")}
+        />
+
         <div className="flex flex-wrap items-center gap-1">
           <DropdownMenu>
-            <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted">
-                {activeFilter?.label ?? t("filterAll")}
+            <DropdownMenuTrigger
+              className={cn(
+                "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
+                status !== "all" ? "text-primary" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+                {status === "all" ? t("statusLabel") : activeStatus?.label}
                 <ChevronDown className="h-3 w-3" />
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
               className="border-border bg-popover"
             >
-              {FILTER_OPTIONS.map((opt) => (
+              {STATUS_OPTIONS.map((opt) => (
                 <DropdownMenuItem
                   key={opt.value}
-                  onClick={() => setFilter(opt.value)}
+                  onClick={() => chooseStatus(opt.value)}
                   className={cn(
                     "text-sm",
-                    filter === opt.value
+                    status === opt.value
                       ? "text-primary"
                       : "text-popover-foreground"
                   )}
@@ -414,6 +530,9 @@ export function ConversationList({
                 isActive={conv.id === activeConversationId}
                 onSelect={handleSelect}
                 t={t}
+                tRoot={tRoot}
+                now={now}
+                badgeContext={badgeContext}
               />
             ))}
           </div>
@@ -423,11 +542,59 @@ export function ConversationList({
   );
 }
 
+function QuickFilterChips({
+  value,
+  onChange,
+  labels,
+  counts,
+  ariaLabel,
+}: {
+  value: InboxQuickFilter;
+  onChange: (f: InboxQuickFilter) => void;
+  labels: Record<InboxQuickFilter, string>;
+  counts: InboxCounts | null;
+  ariaLabel: string;
+}) {
+  return (
+    <div role="tablist" aria-label={ariaLabel} className="flex flex-wrap gap-1">
+      {QUICK_FILTERS.map((f) => {
+        const n = f === "all" ? null : counts?.[f] ?? null;
+        const selected = value === f;
+        return (
+          <button
+            key={f}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            onClick={() => onChange(f)}
+            className={cn(
+              "inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs transition-colors",
+              selected
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            {labels[f]}
+            {n !== null && (
+              <span className={cn("tabular-nums", selected ? "text-primary" : "text-muted-foreground")}>
+                {n}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 interface ConversationItemProps {
   conversation: Conversation;
   isActive: boolean;
   onSelect: (conversation: Conversation) => void;
   t: ReturnType<typeof useTranslations>;
+  tRoot: ReturnType<typeof useTranslations>;
+  now: Date;
+  badgeContext: InboxBadgeContext;
 }
 
 function ConversationItem({
@@ -435,6 +602,9 @@ function ConversationItem({
   isActive,
   onSelect,
   t,
+  tRoot,
+  now,
+  badgeContext,
 }: ConversationItemProps) {
   const contact = conversation.contact;
   const displayName = contact?.name || contact?.phone || t("unknown");
@@ -443,6 +613,17 @@ function ConversationItem({
   const handleClick = useCallback(() => {
     onSelect(conversation);
   }, [onSelect, conversation]);
+
+  const waiting = conversation.status !== "closed" && !!conversation.awaiting_since;
+  const badge = conversationBadge({
+    inActiveFlow: badgeContext.flowConversationIds.has(conversation.id),
+    aiHandles: aiHandlesConversation({
+      aiActive: badgeContext.aiActive,
+      autoReplyEnabled: badgeContext.autoReplyEnabled,
+      autoRespondersActive: badgeContext.autoRespondersActive,
+      conversation,
+    }),
+  });
 
   const timeAgo = conversation.last_message_at
     ? formatDistanceToNow(new Date(conversation.last_message_at), {
@@ -484,6 +665,18 @@ function ConversationItem({
             {conversation.last_message_text || t("noMessagesYet")}
           </p>
           <div className="flex shrink-0 items-center gap-1.5">
+            {waiting && (
+              <span
+                className={cn(
+                  "inline-flex items-center gap-0.5 rounded px-1 py-px text-[10px] font-medium tabular-nums",
+                  WAIT_CLASSES[waitBand(conversation.awaiting_since!, now)],
+                )}
+                title={t("waitingTitle")}
+              >
+                <Clock className="h-2.5 w-2.5" aria-hidden />
+                {formatWait(conversation.awaiting_since!, now, tRoot)}
+              </span>
+            )}
             {conversation.unread_count > 0 && (
               <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
                 {conversation.unread_count}
@@ -498,6 +691,11 @@ function ConversationItem({
             />
           </div>
         </div>
+        {badge && (
+          <p className="mt-1 text-[10px] font-medium text-primary">
+            {badge === "flow" ? t("badgeFlow") : t("badgeAi")}
+          </p>
+        )}
       </div>
     </button>
   );

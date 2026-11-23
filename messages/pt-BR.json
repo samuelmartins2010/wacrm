@@ -161,7 +161,16 @@
       "clearAll": "Limpar tudo",
       "noConversations": "Nenhuma conversa encontrada",
       "noMessagesYet": "Ainda não há mensagens",
-      "unknown": "Desconhecido"
+      "unknown": "Desconhecido",
+      "filterMine": "Minhas",
+      "filterUnassigned": "Sem dono",
+      "filterAwaiting": "Aguardando",
+      "statusAll": "Todos os status",
+      "statusLabel": "Status",
+      "quickFiltersLabel": "Filtros rápidos",
+      "waitingTitle": "Tempo esperando resposta",
+      "badgeAi": "🤖 I.A atendendo",
+      "badgeFlow": "🤖 Fluxo em andamento"
     },
     "messageThread": {
       "backToConversations": "Voltar para conversas",
@@ -291,6 +300,12 @@
       "resumed": "IA retomada.",
       "updateError": "Não foi possível atualizar o assistente de IA.",
       "networkError": "Não foi possível acessar o servidor."
+    },
+    "wait": {
+      "now": "agora",
+      "minutes": "{n} min",
+      "hours": "{n} h",
+      "days": "{n} d"
     }
   },
   "Contacts": {

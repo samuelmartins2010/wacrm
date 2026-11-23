@@ -161,7 +161,16 @@
       "clearAll": "Clear all",
       "noConversations": "No conversations found",
       "noMessagesYet": "No messages yet",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "filterMine": "Mine",
+      "filterUnassigned": "Unassigned",
+      "filterAwaiting": "Awaiting",
+      "statusAll": "All statuses",
+      "statusLabel": "Status",
+      "quickFiltersLabel": "Quick filters",
+      "waitingTitle": "Time waiting for a reply",
+      "badgeAi": "🤖 AI handling",
+      "badgeFlow": "🤖 Flow in progress"
     },
     "messageThread": {
       "backToConversations": "Back to conversations",
@@ -291,6 +300,12 @@
       "resumed": "AI resumed.",
       "updateError": "Couldn’t update the AI assistant.",
       "networkError": "Couldn’t reach the server."
+    },
+    "wait": {
+      "now": "now",
+      "minutes": "{n} min",
+      "hours": "{n} h",
+      "days": "{n} d"
     }
   },
   "Contacts": {

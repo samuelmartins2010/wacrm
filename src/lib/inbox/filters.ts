@@ -71,3 +71,33 @@ export function compareAwaiting(
   if (ta === tb) return 0
   return ta < tb ? -1 : 1
 }
+
+/** O mínimo do query builder do Supabase que o filtro usa. */
+interface FilterableQuery<Q> {
+  eq(column: string, value: unknown): Q
+  is(column: string, value: null): Q
+  neq(column: string, value: unknown): Q
+  not(column: string, operator: string, value: unknown): Q
+  gt(column: string, value: unknown): Q
+  order(column: string, options: { ascending: boolean }): Q
+}
+
+/**
+ * Aplica o filtro rápido na consulta de conversas (o Inbox lê no máximo
+ * 1.000 por vez, então o filtro precisa rodar no banco). Mesmas regras de
+ * `matchesInboxFilter` e de `inbox_filter_counts`.
+ */
+export function applyQuickFilter<Q extends FilterableQuery<Q>>(q: Q, filter: InboxQuickFilter, userId: string): Q {
+  switch (filter) {
+    case 'all':
+      return q
+    case 'mine':
+      return q.eq('assigned_agent_id', userId).neq('status', 'closed')
+    case 'unassigned':
+      return q.is('assigned_agent_id', null).neq('status', 'closed')
+    case 'awaiting':
+      return q.not('awaiting_since', 'is', null).neq('status', 'closed').order('awaiting_since', { ascending: true })
+    case 'unread':
+      return q.gt('unread_count', 0)
+  }
+}

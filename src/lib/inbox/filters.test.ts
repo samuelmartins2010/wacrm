@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Conversation } from '@/types'
-import { compareAwaiting, formatWait, matchesInboxFilter, waitBand } from './filters'
+import { applyQuickFilter, compareAwaiting, formatWait, matchesInboxFilter, waitBand } from './filters'
 
 // Mesmas regras do banco (migration 057 / inbox_filter_counts): encerradas
 // ficam fora de Minhas, Sem dono e Aguardando; Não lidas conta todas.
@@ -93,5 +93,49 @@ describe('compareAwaiting', () => {
       { id: 'a', awaiting_since: '2026-11-19T09:00:00Z' },
     ] as Conversation[]
     expect([...list].sort(compareAwaiting).map((c) => c.id)).toEqual(['a', 'b', 'n'])
+  })
+})
+
+describe('applyQuickFilter (filtro no banco)', () => {
+  // Query builder falso: registra as chamadas e devolve a si mesmo.
+  const fakeQuery = () => {
+    const calls: unknown[][] = []
+    const q = {
+      calls,
+      eq: (...a: unknown[]) => (calls.push(['eq', ...a]), q),
+      is: (...a: unknown[]) => (calls.push(['is', ...a]), q),
+      neq: (...a: unknown[]) => (calls.push(['neq', ...a]), q),
+      not: (...a: unknown[]) => (calls.push(['not', ...a]), q),
+      gt: (...a: unknown[]) => (calls.push(['gt', ...a]), q),
+      order: (...a: unknown[]) => (calls.push(['order', ...a]), q),
+    }
+    return q
+  }
+
+  it('Minhas: responsável sou eu, não encerrada', () => {
+    expect(applyQuickFilter(fakeQuery(), 'mine', ME).calls).toEqual([
+      ['eq', 'assigned_agent_id', ME],
+      ['neq', 'status', 'closed'],
+    ])
+  })
+
+  it('Sem dono: sem responsável, não encerrada', () => {
+    expect(applyQuickFilter(fakeQuery(), 'unassigned', ME).calls).toEqual([
+      ['is', 'assigned_agent_id', null],
+      ['neq', 'status', 'closed'],
+    ])
+  })
+
+  it('Aguardando: com espera, não encerrada, quem espera há mais tempo primeiro', () => {
+    expect(applyQuickFilter(fakeQuery(), 'awaiting', ME).calls).toEqual([
+      ['not', 'awaiting_since', 'is', null],
+      ['neq', 'status', 'closed'],
+      ['order', 'awaiting_since', { ascending: true }],
+    ])
+  })
+
+  it('Não lidas: qualquer status; Todas: nada', () => {
+    expect(applyQuickFilter(fakeQuery(), 'unread', ME).calls).toEqual([['gt', 'unread_count', 0]])
+    expect(applyQuickFilter(fakeQuery(), 'all', ME).calls).toEqual([])
   })
 })
