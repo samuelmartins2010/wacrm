@@ -1,11 +1,20 @@
-# Deploy das migrations 040–056 no Supabase (SQL Editor)
+# Deploy das migrations 040–062 no Supabase (SQL Editor)
 
-Guia para aplicar no projeto da nuvem as migrations da Reativação (040–047) e das
-correções de Automações e Fluxos (048–056). A 056 (D10, operações em massa sem
-gatilho) entrou depois do nome deste arquivo e faz parte do mesmo pacote.
+Guia para aplicar no projeto da nuvem as migrations da Reativação (040–047), das
+correções de Automações e Fluxos (048–056), do Inbox com filtros, notas e
+transferência (057–060), da fila de eventos das automações (061) e da trava da
+Reativação que se recria sozinha (062).
 
-Todas foram testadas em replay completo (`npx supabase db reset`, 001→056 em
-ordem, sem erro) em 18/11/2026, com `supabase test db` passando em seguida.
+Todas foram testadas em replay completo, 001→062 em ordem e sem erro: o job
+"Banco (migrations + pgTAP)" do CI faz isso a cada PR, e o replay local de
+18/11/2026 cobriu 001→056. As 23 consultas de verificação abaixo foram rodadas
+no banco local em 23/11/2026 e voltaram todas `true`.
+
+> **Duas janelas.** As 040–056 podem entrar antes do código novo (só
+> acrescentam). As **057–062 vão juntas, na mesma janela e logo antes do deploy
+> do código do `main`**: a 060 passa a recusar troca direta de responsável, e o
+> código antigo da VPS atribui conversa por UPDATE direto. Entre a 060 e o
+> deploy, atribuir pelo Inbox antigo dá erro.
 
 ## Antes de começar
 
@@ -25,6 +34,9 @@ ordem, sem erro) em 18/11/2026, com `supabase test db` passando em seguida.
    `039_account_document_phone.sql`).
 3. **Pausar o cron** das automações, fluxos e reativação enquanto aplica
    (as rotas `/api/*/cron`), para nada rodar com o banco pela metade.
+4. **Para a janela 057–062:** avise quem estiver usando que o Inbox fica alguns
+   minutos sem trocar responsável, e tenha o deploy do código pronto para subir
+   logo depois da 062.
 
 ## Como aplicar cada uma
 
@@ -65,8 +77,14 @@ Para **cada** arquivo, na ordem da tabela:
 | 15 | `054_automation_logs_waiting.sql` | Status `waiting` no log de automação | `select pg_get_constraintdef((select oid from pg_constraint where conname='automation_logs_status_check')) like '%waiting%';` |
 | 16 | `055_automation_trigger_events.sql` | Fila de eventos `tag_added`/`conversation_assigned` + triggers + funções com profundidade (anti-loop) | `select to_regclass('public.automation_trigger_events') is not null and exists (select 1 from pg_trigger where tgname='contact_tags_emit_tag_added') and to_regprocedure('public.claim_automation_trigger_events(uuid,integer)') is not null;` |
 | 17 | `056_automation_events_bulk_silent.sql` | Importação, etiqueta em lote e atribuição em lote não geram eventos | `select to_regprocedure('public.contact_tags_insert_bulk(jsonb)') is not null and to_regprocedure('public.contacts_bulk_add_tag(uuid[],uuid)') is not null and to_regprocedure('public.conversations_bulk_assign(uuid[],uuid)') is not null;` |
+| 18 | `057_inbox_awaiting.sql` | Espera por resposta humana (`awaiting_since`, `closed_at`, `sent_via_api`), triggers em mensagens e conversas, backfill da espera das conversas existentes, `inbox_filter_counts()` | `select exists (select 1 from information_schema.columns where table_name='conversations' and column_name='awaiting_since') and exists (select 1 from information_schema.columns where table_name='conversations' and column_name='closed_at') and exists (select 1 from information_schema.columns where table_name='messages' and column_name='sent_via_api') and to_regprocedure('public.inbox_filter_counts()') is not null and exists (select 1 from pg_trigger where tgname='conversations_awaiting_on_status');` |
+| 19 | `058_conversation_events.sql` | Notas internas e trocas de responsável (`conversation_events`, leitura só para membros, escrita só pelas funções), `transfer_conversation`, `add_conversation_note`; automação e lote passam a gravar o evento; tabela no tempo real | `select to_regclass('public.conversation_events') is not null and to_regprocedure('public.transfer_conversation(uuid,uuid,text)') is not null and to_regprocedure('public.add_conversation_note(uuid,text)') is not null and exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and tablename='conversation_events');` |
+| 20 | `059_conversation_assignee_rules.sql` | Responsável só dono/admin/atendente da conta; cliente reabre conversa encerrada; quem perde acesso libera as conversas abertas; `record_assignment_event` com `p_only_if_unassigned` | `select exists (select 1 from pg_trigger where tgname='conversations_check_assignee') and exists (select 1 from pg_trigger where tgname='messages_reopen_on_customer') and exists (select 1 from pg_trigger where tgname='profiles_unassign_on_access_loss') and to_regprocedure('public.record_assignment_event(uuid,uuid,text,uuid,text,boolean)') is not null and to_regprocedure('public.record_assignment_event(uuid,uuid,text,uuid,text)') is null;` |
+| 21 | `060_conversation_assignee_event_only.sql` | Trava: o responsável só muda junto com um evento (UPDATE direto recusado). **Ver o aviso das duas janelas.** | `select exists (select 1 from pg_trigger where tgname='conversations_require_assignment_event');` |
+| 22 | `061_automation_events_active_and_expiry.sql` | Fila de eventos das automações: só dispara automação já ativa no momento do evento (`automations.activated_at`); evento com mais de 60 min é descartado e registrado nos logs como "Ignorada" | `select exists (select 1 from information_schema.columns where table_name='automations' and column_name='activated_at') and to_regprocedure('public.expire_stale_automation_trigger_events(uuid)') is not null and pg_get_constraintdef((select oid from pg_constraint where conname='automation_logs_status_check')) like '%skipped%' and pg_get_constraintdef((select oid from pg_constraint where conname='automation_trigger_events_status_check')) like '%expired%';` |
+| 23 | `062_reactivation_run_lock_self_heal.sql` | A trava de rodada da Reativação se recria sozinha se a linha fixa sumir | `select pg_get_functiondef('public.reactivation_try_lock(uuid,integer)'::regprocedure) like '%ON CONFLICT%' and exists (select 1 from reactivation_run_lock where id=1);` |
 
-Conferência final (deve listar 17 linhas, todas `true`), rodando as consultas
+Conferência final (deve listar 23 linhas, todas `true`), rodando as consultas
 acima juntas ou só esta, mais curta:
 
 ```sql
@@ -74,7 +92,11 @@ select
   to_regclass('public.reactivation_enrollments') is not null as r040,
   to_regclass('public.reactivation_run_lock')    is not null as r045,
   to_regclass('public.automation_trigger_events') is not null as r055,
-  to_regprocedure('public.contacts_bulk_add_tag(uuid[],uuid)') is not null as r056;
+  to_regprocedure('public.contacts_bulk_add_tag(uuid[],uuid)') is not null as r056,
+  to_regclass('public.conversation_events')       is not null as r058,
+  exists (select 1 from pg_trigger where tgname = 'conversations_require_assignment_event') as r060,
+  to_regprocedure('public.expire_stale_automation_trigger_events(uuid)') is not null as r061,
+  pg_get_functiondef('public.reactivation_try_lock(uuid,integer)'::regprocedure) like '%ON CONFLICT%' as r062;
 ```
 
 ## Se uma falhar no meio
@@ -82,7 +104,8 @@ select
 - **Com `begin;`/`commit;` em volta, uma falha desfaz o arquivo inteiro.** Nada
   daquela migration fica pela metade. As anteriores (já com `commit`) ficam.
 - **Não pule para a próxima.** As seguintes dependem das anteriores (ex.: 047
-  depende das tabelas da 040; 056 substitui funções da 055).
+  depende das tabelas da 040; 056 substitui funções da 055; 059 e 060 dependem
+  da tabela da 058; 061 substitui o claim da 055; 062 substitui a trava da 045).
 - Leia a mensagem de erro e compare com o arquivo. Casos mais prováveis:
   - *"relation … does not exist"*: falta uma migration anterior (ou 037–039).
   - *"could not create unique index"* (046, 052): há duplicatas que o `UPDATE`
@@ -90,9 +113,18 @@ select
     com o cron pausado.
   - *"permission denied"*: rode como o usuário dono do banco (o SQL Editor já usa
     `postgres`).
-- Todas as migrations 040–056 são **reexecutáveis**: `IF NOT EXISTS`,
+- Todas as migrations 040–062 são **reexecutáveis**: `IF NOT EXISTS`,
   `CREATE OR REPLACE`, `DROP … IF EXISTS`. Corrigido o motivo, rode o mesmo
   arquivo de novo do começo.
+- **Exceção de ordem:** se precisar rodar a **058 de novo depois que a 059 já
+  passou**, rode a **059 de novo** em seguida. A 058 recria a versão antiga de
+  `record_assignment_event` (5 parâmetros), que a 059 troca pela nova (6); as
+  duas juntas deixam a chamada ambígua. A verificação da 059 pega isso (a antiga
+  tem que ser `null`).
+- *"assignee changes must go through transfer_conversation"* (depois da 060): é
+  o código antigo tentando trocar responsável direto. Suba o código novo; para
+  corrigir um responsável à mão, ver "Corrigir o responsável à mão" no
+  IMPLANTACOES (entrada do Inbox, 23/11).
 - Se não souber o que fazer: **pare**, deixe o cron pausado e o app no ar
   (o código antigo continua funcionando com as migrations já aplicadas, porque
   todas só acrescentam), e restaure o backup só se algum dado tiver sido
@@ -100,8 +132,10 @@ select
 
 ## Depois de aplicar
 
-1. Faça o deploy do código da branch (depois do merge do PR).
+1. Faça o deploy do código do `main` (logo depois da 062, na mesma janela).
 2. Reative os crons (`/api/automations/cron`, `/api/flows/cron`,
    `/api/reactivation/cron`, todos com o header `x-cron-secret`).
 3. Confira no app: /automations abre, /flows abre, /reactivation abre, e o
    log de uma automação de teste mostra "Aguardando" durante um wait.
+4. Inbox: os filtros Minhas / Sem dono / Aguardando aparecem com contadores;
+   transferir uma conversa com observação mostra a linha e a nota na conversa.
