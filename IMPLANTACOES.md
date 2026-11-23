@@ -22,10 +22,10 @@ Modelo de entrada:
 
 Checklist para tirar a produção da pausa (VPS + Supabase cloud). Siga na ordem; cada item diz onde conferir.
 
-1. **Migrations 040–056 antes de subir o código.**
-   - Rodar no SQL Editor do Supabase cloud (projeto `crm`), **uma por vez e na ordem** do `docs/deploy-migrations-040-055.md` (o guia cobre 040–056), com o cron pausado.
+1. **Migrations 040–062 antes de subir o código.**
+   - Rodar no SQL Editor do Supabase cloud (projeto `crm`), **uma por vez e na ordem** do `docs/deploy-migrations-040-062.md`, com o cron pausado. As 040–056 podem ir antes; as **057–062 vão juntas, logo antes do deploy do código** (a 060 recusa a troca direta de responsável que o código antigo faz).
    - **Onde conferir:** depois de cada migration, rodar a consulta de verificação da tabela do guia; ela tem que voltar `true`. Se alguma falhar, seguir o "plano se falhar" do guia e **não** subir o código novo.
-   - Só depois de a 056 passar, subir o código do `main` na VPS.
+   - Só depois de a 062 passar, subir o código do `main` na VPS (na mesma janela da 057–062).
 
 2. **Pinger chamando os 3 crons a cada 5 min**, todos com o header `x-cron-secret: <AUTOMATION_CRON_SECRET>`:
    - `/api/automations/cron`. Se faltar, as automações paradas num passo **Aguardar** nunca continuam, e eventos de `tag_added`/`conversation_assigned` que não foram tratados na hora (rede de segurança do D3) nunca disparam.
@@ -168,7 +168,7 @@ Checklist para tirar a produção da pausa (VPS + Supabase cloud). Siga na ordem
 - **O que mudou:**
   - `477988a` (D10): migration 056 — os triggers da 055 respeitam `app.automation_events='off'`, ligado só dentro da transação pelas funções `contact_tags_insert_bulk` (importação), `contacts_bulk_add_tag` (lote) e `conversations_bulk_assign` (lote; ainda sem tela). Importação CSV e (até o D12) `POST /api/v1/contacts` gravam etiquetas pela função de massa; `PATCH /api/v1/contacts/[id]`, a ficha, o formulário, fluxos e automações continuam disparando. Nova ação **Etiquetar** na barra de seleção de Contatos (antes só havia excluir).
   - `9df736c` (D11): `hasActiveFlowRun` no store do runner; com fluxo ativo a inscrição volta a vencer na próxima rodada.
-  - `0de6c71`: `docs/deploy-migrations-040-055.md` — ordem, verificação por migration (040–056) e plano se falhar.
+  - `0de6c71`: `docs/deploy-migrations-040-055.md` (hoje `docs/deploy-migrations-040-062.md`) — ordem, verificação por migration (040–056) e plano se falhar.
 - **Banco (migrations):** 056_automation_events_bulk_silent.
 - **Replay feito (18/11/2026):** `pg_dump` completo em `~/Developer/wacrm-secrets/local-backup-2026-11-18.sql` (+ dump só de dados `local-data-2026-11-18.sql`, ambos 600); `npx supabase db reset` aplicou 001→056 em ordem sem erro; `supabase test db` passou no banco novo (58 asserts); dados restaurados (admin local, 4 contatos aaaaaaaa, template volta_cliente) e login confirmado por sessão real do Supabase Auth.
 - **Como foi testado:** vitest 933/933, pgTAP 58, tsc e build ok. Ponta a ponta (proxy da Meta, crons via curl): 40 importados pelo código do import-modal + 10 pela API v1 + 50 em lote com a etiqueta T e automação `tag_added(T)` ativa → 0 eventos, 0 execuções; T em 1 contato pela ficha → 1 execução; loop A7 L1→L2→L3 continua cortado na profundidade 2. D11: contato no menu do fluxo + toque devido → adiado, nada enviado; fluxo encerrado (tempo esgotado) → toque saiu na rodada seguinte (dry-run).
