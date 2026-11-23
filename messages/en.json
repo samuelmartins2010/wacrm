@@ -172,6 +172,26 @@
       "badgeAi": "🤖 AI handling",
       "badgeFlow": "🤖 Flow in progress"
     },
+    "transfer": {
+      "title": "Transfer to {name}",
+      "sameAssigneeTitle": "Note for {name}",
+      "sameAssigneeHint": "{name} is already the assignee. The note is saved as an internal note, with no new transfer.",
+      "noteLabel": "Internal note (optional)",
+      "notePlaceholder": "E.g.: customer wants a copy of the March invoice; ID already confirmed.",
+      "privateHint": "Only your team sees this. It is not sent to the customer.",
+      "notificationHint": "{name} sees the start of the note in the notification.",
+      "cancel": "Cancel",
+      "submit": "Transfer",
+      "submitNote": "Save note",
+      "submitting": "Transferring…",
+      "transferred": "Conversation transferred to {name}",
+      "noteSaved": "Note saved",
+      "unassigned": "Assignee removed",
+      "errorForbidden": "You don't have permission to transfer this conversation.",
+      "errorViewer": "This member has a view-only role and cannot be the assignee.",
+      "errorNotMember": "This member is no longer part of this account.",
+      "errorUnknown": "Couldn't change the assignee. Try again."
+    },
     "messageThread": {
       "backToConversations": "Back to conversations",
       "hideContactPanel": "Hide contact panel",

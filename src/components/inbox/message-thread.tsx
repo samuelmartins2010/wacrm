@@ -52,11 +52,12 @@ import { TemplatePicker } from "./template-picker";
 import { AiThreadBanner } from "./ai-thread-banner";
 import { buildReplyPreview } from "./reply-quote";
 import { toast } from "sonner";
-import { pingAutomationEvents } from "@/lib/automations/ping";
 import { mergeTimeline, type TimelineItem } from "@/lib/inbox/timeline";
 import { normalizeNote } from "@/lib/inbox/notes";
 import { ConversationEventItem } from "./conversation-event";
 import { NoteComposer } from "./note-composer";
+import { TransferDialog, transferErrorMessage, type TransferTarget } from "./transfer-dialog";
+import { transferConversation } from "@/lib/inbox/transfer";
 
 interface ReplyDraft {
   id: string;
@@ -179,8 +180,10 @@ export function MessageThread({
   const tTimer = useTranslations("Inbox.sessionTimer");
   const tQuote = useTranslations("Inbox.replyQuote");
   const tComposer = useTranslations("Inbox.composer");
+  const tTransfer = useTranslations("Inbox.transfer");
 
   const { user } = useAuth();
+  const [transferTarget, setTransferTarget] = useState<TransferTarget | null>(null);
   const { getPresence, getRow, now } = usePresence();
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -919,23 +922,24 @@ export function MessageThread({
     [conversation, user?.id],
   );
 
-  const handleAssignChange = useCallback(
-    async (agentId: string | null) => {
+  // Troca de responsável só pela RPC transfer_conversation (spec 5.4/5.6):
+  // escolher um membro abre o TransferDialog; remover vai direto, sem diálogo.
+  const handleUnassign = useCallback(async () => {
+    if (!conversation) return;
+    try {
+      await transferConversation(createClient(), conversation.id, null, "");
+    } catch (err) {
+      console.error("Failed to remove assignee:", err);
+      toast.error(transferErrorMessage(tTransfer, err));
+      return;
+    }
+    toast.success(tTransfer("unassigned"));
+    onAssignChange(conversation.id, null);
+  }, [conversation, onAssignChange, tTransfer]);
+
+  const handleTransferred = useCallback(
+    (agentId: string) => {
       if (!conversation) return;
-
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("conversations")
-        .update({ assigned_agent_id: agentId })
-        .eq("id", conversation.id);
-
-      if (error) {
-        console.error("Failed to update assignment:", error);
-        toast.error("Failed to update assignment");
-        return;
-      }
-
-      if (agentId) pingAutomationEvents(); // D3: conversation_assigned
       onAssignChange(conversation.id, agentId);
     },
     [conversation, onAssignChange],
@@ -1121,7 +1125,13 @@ export function MessageThread({
                   return (
                     <DropdownMenuItem
                       key={p.id}
-                      onClick={() => handleAssignChange(p.user_id)}
+                      onClick={() =>
+                        setTransferTarget({
+                          conversationId: conversation.id,
+                          userId: p.user_id,
+                          name: p.full_name || t("assigned"),
+                        })
+                      }
                       className={cn(
                         "text-sm",
                         isSelected ? "text-primary" : "text-popover-foreground"
@@ -1149,7 +1159,7 @@ export function MessageThread({
                 <>
                   <DropdownMenuSeparator className="bg-border" />
                   <DropdownMenuItem
-                    onClick={() => handleAssignChange(null)}
+                    onClick={() => void handleUnassign()}
                     className="text-sm text-muted-foreground"
                   >
                     {t("unassign")}
@@ -1300,6 +1310,14 @@ export function MessageThread({
         open={templateModalOpen}
         onOpenChange={setTemplateModalOpen}
         onSelect={handleSendTemplate}
+      />
+
+      <TransferDialog
+        conversationId={conversation.id}
+        target={transferTarget}
+        isCurrentAssignee={transferTarget?.userId === assignedAgentId}
+        onClose={() => setTransferTarget(null)}
+        onTransferred={handleTransferred}
       />
     </div>
   );

@@ -13,6 +13,8 @@ describe('notas internas', () => {
     expect(hasVisibleText('  \n\t ')).toBe(false)
     expect(hasVisibleText(' 　​﻿')).toBe(false)
     expect(hasVisibleText(' ok ')).toBe(true)
+    // U+0085 (NEL): o banco não conta como visível (revisão da tarefa 8)
+    expect(hasVisibleText(String.fromCodePoint(0x85))).toBe(false)
   })
 
   it('normalizeNote apara as pontas e devolve null sem texto visível', () => {

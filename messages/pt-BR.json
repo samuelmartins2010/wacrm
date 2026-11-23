@@ -172,6 +172,26 @@
       "badgeAi": "🤖 I.A atendendo",
       "badgeFlow": "🤖 Fluxo em andamento"
     },
+    "transfer": {
+      "title": "Transferir para {name}",
+      "sameAssigneeTitle": "Observação para {name}",
+      "sameAssigneeHint": "{name} já é o responsável. A observação vira uma nota interna, sem nova transferência.",
+      "noteLabel": "Observação interna (opcional)",
+      "notePlaceholder": "Ex.: cliente quer a 2ª via do boleto de março; já confirmei o CPF.",
+      "privateHint": "Só a equipe vê. Não é enviada ao cliente.",
+      "notificationHint": "{name} vê o início da observação na notificação.",
+      "cancel": "Cancelar",
+      "submit": "Transferir",
+      "submitNote": "Salvar nota",
+      "submitting": "Transferindo…",
+      "transferred": "Conversa transferida para {name}",
+      "noteSaved": "Nota salva",
+      "unassigned": "Responsável removido",
+      "errorForbidden": "Você não tem permissão para transferir esta conversa.",
+      "errorViewer": "Esse membro só tem acesso de visualização e não pode ser responsável.",
+      "errorNotMember": "Esse membro não faz mais parte desta conta.",
+      "errorUnknown": "Não foi possível alterar o responsável. Tente de novo."
+    },
     "messageThread": {
       "backToConversations": "Voltar para conversas",
       "hideContactPanel": "Ocultar painel de contato",

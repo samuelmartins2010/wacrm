@@ -8,6 +8,7 @@ export const NOTE_MAX_LENGTH = 2000
 // Mesmo conjunto de _note_has_text: espaços Unicode, zero-width e BOM
 // (por código, para não depender de escapes no fonte).
 const INVISIBLE_RANGES: [number, number][] = [
+  [0x0085, 0x0085],
   [0x00a0, 0x00a0],
   [0x1680, 0x1680],
   [0x2000, 0x200d],
