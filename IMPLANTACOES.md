@@ -48,6 +48,20 @@ Checklist para tirar a produção da pausa (VPS + Supabase cloud). Siga na ordem
 
 ---
 
+## 2026-11-23: Trava da Reativação se recria sozinha
+- **Origem:** no teste local, uma limpeza apagou a linha fixa da trava (migration 045) e o cron da Reativação passou a responder `{locked: true}` para sempre, sem enviar nada. Pedido do Samuel.
+- **O que mudou:** `reactivation_try_lock` recria a linha (`INSERT ... ON CONFLICT DO NOTHING`) antes de pegar a trava. Duas rodadas ao mesmo tempo continuam impossíveis: a segunda espera a primeira terminar e encontra a trava ocupada.
+- **Banco (migrations):** `062_reactivation_run_lock_self_heal` (só troca a função; mesma assinatura e permissões).
+- **Arquivos principais:** a migration e `supabase/tests/reactivation_run_lock.test.sql`.
+- **Como foi testado:**
+  - pgTAP: 5 asserts novos (linha apagada → a rodada recria e pega; recria uma linha só; segunda rodada simultânea não pega; soltar e pegar de novo). Falharam antes da 062. Suíte de banco 15 arquivos / 213 asserts.
+  - Cron no banco local: linha apagada → antes da 062 `{"locked":true}`; depois `{"sent":0,"skipped":0,"failed":0,"deferred":0}` e a linha recriada livre.
+  - Concorrência com duas sessões reais, sem a linha: a rodada A recria e pega; a B espera a A terminar (~3 s) e recebe `false`; fica uma linha só.
+- **Commit/branch:** `fix/trava-reativacao-autorrecuperavel`.
+- **Pendências / riscos:** nenhuma específica. Na VPS, aplicar a 062 depois da 061.
+
+---
+
 ## 2026-11-23: Fila de eventos das automações sem disparos atrasados
 - **Origem:** visto no ponta a ponta do Inbox (PR #7): eventos de "conversa atribuída" que estavam na fila dispararam uma automação ligada depois deles. Pedido do Samuel.
 - **O que mudou:**
