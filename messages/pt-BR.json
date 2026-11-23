@@ -926,10 +926,12 @@
         "partial": "parcial",
         "failed": "falhou",
         "cancelled": "Cancelada",
-        "waiting": "Aguardando"
+        "waiting": "Aguardando",
+        "skipped": "Ignorada"
       },
       "back": "Voltar",
-      "backAria": "Voltar"
+      "backAria": "Voltar",
+      "skippedStale": "Não disparou: o evento ficou mais de 60 minutos na fila sem ser processado (evento vencido)."
     },
     "builder": {
       "steps": {

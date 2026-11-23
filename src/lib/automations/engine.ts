@@ -290,15 +290,16 @@ export async function drainAutomationTriggerEvents(accountId: string | null, lim
   let fired = 0
   try {
     const db = supabaseAdmin()
-    // 061: events left in the queue for more than 10 minutes are dropped
-    // (a late drain must not fire stale tags/assignments).
+    // 061: events left in the queue for more than 60 minutes are dropped
+    // (a late drain must not fire stale tags/assignments); the database also
+    // writes a 'skipped' row ("evento vencido") to each automation's logs.
     const { data: expired, error: expireErr } = await db.rpc('expire_stale_automation_trigger_events', {
       p_account_id: accountId,
     })
     if (expireErr) {
       console.error('[automations] expire stale trigger events failed:', expireErr)
     } else if (Number(expired) > 0) {
-      console.warn('[automations] eventos da fila com mais de 10 min descartados:', {
+      console.warn('[automations] eventos da fila com mais de 60 min descartados:', {
         accountId,
         count: Number(expired),
       })

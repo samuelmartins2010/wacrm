@@ -52,16 +52,16 @@ Checklist para tirar a produção da pausa (VPS + Supabase cloud). Siga na ordem
 - **Origem:** visto no ponta a ponta do Inbox (PR #7): eventos de "conversa atribuída" que estavam na fila dispararam uma automação ligada depois deles. Pedido do Samuel.
 - **O que mudou:**
   - Eventos da fila (`tag_added` / `conversation_assigned`, migration 055) **só disparam automações que já estavam ativas quando o evento foi criado**. Ligar uma automação não "recupera" atribuições ou etiquetas antigas.
-  - Evento com **mais de 10 minutos sem processar é descartado** (`status = 'expired'`) e o drain registra no log quantos descartou (`[automations] eventos da fila com mais de 10 min descartados`). O claim nunca devolve evento vencido.
+  - Evento com **mais de 60 minutos sem processar é descartado** (`status = 'expired'`) e o drain registra no log do servidor quantos descartou (`[automations] eventos da fila com mais de 60 min descartados`). Cada descarte também entra em `automation_logs` (status `skipped`, motivo "evento vencido") para cada automação que o evento teria disparado, e aparece na tela de logs da automação como **Ignorada**. O claim nunca devolve evento vencido.
   - Disparos diretos (mensagem recebida, palavra-chave, primeira mensagem, contato novo) não mudam.
 - **Banco (migrations):** `061_automation_events_active_and_expiry` — `automations.activated_at` (mantido por trigger: hora em que foi ligada; null desligada; backfill das ativas com a última alteração), status `expired`, `expire_stale_automation_trigger_events()` (só servidor) e `claim_automation_trigger_events` ignorando vencidos. Idempotente. **Numerada depois das 057–060 do Inbox: aplicar depois delas (mergear o PR #7 antes deste).**
 - **Arquivos principais:** `src/lib/automations/engine.ts` (`drainAutomationTriggerEvents` expira e passa `activeSince`; `runAutomationsForTrigger` filtra `activated_at <= evento`).
 - **Como foi testado:**
-  - Vitest (`trigger-events.test.ts`): 300 atribuições sem automação ativa → ligar "conversa atribuída" → 0 execuções; 1 atribuição nova → 1; evento de 11 min → `expired` com log. Os dois falharam antes da mudança. Suíte 961/961, typecheck, lint 0 erros, i18n, build.
-  - pgTAP (`automation_events_active_expiry.test.sql`, 12 asserts; falhou antes com "column activated_at does not exist").
-  - Ponta a ponta no banco local pelo cron (`/api/automations/cron`, 23/11/2026): 300 atribuições → ligar a automação → cron → **0 execuções** (300 eventos `done`); 1 atribuição nova → cron → **1 execução** (etiqueta aplicada); evento de 11 minutos → `expired` e a linha no log do servidor. Dados apagados; banco na base.
+  - Vitest (`trigger-events.test.ts`): 300 atribuições sem automação ativa → ligar "conversa atribuída" → 0 execuções; 1 atribuição nova → 1; evento de 61 min → `expired` com log; evento de 59 min ainda dispara. Suíte 962/962, typecheck, lint 0 erros, i18n, build.
+  - pgTAP (`automation_events_active_expiry.test.sql`, 15 asserts; falhou antes com "column activated_at does not exist" e, na troca para 60 min + log, com o prazo antigo e sem o log): descarte só depois de 60 min, log `skipped` / "evento vencido" só na automação que teria disparado (não na de outro atendente nem na ligada depois do evento), sem contar como execução.
+  - Ponta a ponta no banco local pelo cron (`/api/automations/cron`, 23/11/2026): 300 atribuições → ligar a automação → cron → **0 execuções** (300 eventos `done`); 1 atribuição nova → cron → **1 execução** (etiqueta aplicada); evento de 61 minutos → `expired`, linha no log do servidor e log **Ignorada** ("Não disparou: o evento ficou mais de 60 minutos na fila…") na tela de logs da automação; evento de 59 minutos → disparou. Dados apagados; banco na base.
 - **Commit/branch:** `fix/eventos-automacao-vencidos`.
-- **Pendências / riscos:** automação ligada no mesmo instante de um evento (mesma transação) conta como já ativa. Se o cron ficar mais de 10 minutos parado, os eventos desse intervalo são descartados (intencional: melhor não disparar do que disparar atrasado).
+- **Pendências / riscos:** automação ligada no mesmo instante de um evento (mesma transação) conta como já ativa. Se o cron ficar mais de 60 minutos parado, os eventos desse intervalo são descartados (intencional: melhor não disparar do que disparar atrasado).
 
 ---
 

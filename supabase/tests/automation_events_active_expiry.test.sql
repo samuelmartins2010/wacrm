@@ -1,9 +1,9 @@
 -- 061: eventos da fila (055) só disparam automações que já estavam ativas
 -- quando o evento foi criado (automations.activated_at), e eventos com mais
--- de 10 minutos sem processar são descartados ('expired').
+-- de 60 minutos sem processar são descartados ('expired'), com log na automação.
 -- Roda com `npx supabase test db`.
 begin;
-select plan(12);
+select plan(15);
 
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000000e7', 'fila@test.local');
 insert into contacts (id, user_id, account_id, phone, name)
@@ -77,26 +77,46 @@ update automations set name = 'Renomeada' where id = '00000000-0000-0000-0000-00
 select isnt((select activated_at from automations where id = '00000000-0000-0000-0000-00000000e7f1'), null,
   'editar outra coisa não mexe em activated_at');
 
--- ── eventos vencidos ────────────────────────────────────────────────
+-- ── eventos vencidos (mais de 60 minutos) ───────────────────────────
 select pg_temp.assign(null);
+-- e7f1 ativa há 2 h (teria disparado); e7f2 só para outro atendente; e7f3 ligada agora
+update automations set activated_at = now() - interval '2 hours' where id = '00000000-0000-0000-0000-00000000e7f1';
+insert into automations (id, user_id, account_id, name, trigger_type, trigger_config, is_active) values
+  ('00000000-0000-0000-0000-00000000e7f2', '00000000-0000-0000-0000-0000000000e7', pg_temp.acct(),
+   'Só de outro atendente', 'conversation_assigned', '{"agent_id":"00000000-0000-0000-0000-0000000000ff"}', true),
+  ('00000000-0000-0000-0000-00000000e7f3', '00000000-0000-0000-0000-0000000000e7', pg_temp.acct(),
+   'Ligada agora', 'conversation_assigned', '{}', true);
+update automations set activated_at = now() - interval '2 hours' where id = '00000000-0000-0000-0000-00000000e7f2';
 insert into automation_trigger_events (account_id, trigger_type, contact_id, context, depth, created_at)
-values (pg_temp.acct(), 'conversation_assigned', '00000000-0000-0000-0000-00000000e7c1', '{}', 0, now() - interval '11 minutes'),
-       (pg_temp.acct(), 'conversation_assigned', '00000000-0000-0000-0000-00000000e7c1', '{}', 0, now() - interval '9 minutes');
+values (pg_temp.acct(), 'conversation_assigned', '00000000-0000-0000-0000-00000000e7c1', '{}', 0, now() - interval '61 minutes'),
+       (pg_temp.acct(), 'conversation_assigned', '00000000-0000-0000-0000-00000000e7c1', '{}', 0, now() - interval '59 minutes');
 delete from automation_trigger_events where account_id = pg_temp.acct() and status = 'pending'
    and created_at > now() - interval '1 minute';
 
 select is((select count(*)::int from claim_automation_trigger_events(pg_temp.acct(), 10)
-            where created_at < now() - interval '10 minutes'), 0,
-  'claim nunca devolve evento com mais de 10 minutos');
+            where created_at < now() - interval '60 minutes'), 0,
+  'claim nunca devolve evento com mais de 60 minutos');
 update automation_trigger_events set status = 'pending'
  where account_id = pg_temp.acct() and status = 'processing';
 
 select is(expire_stale_automation_trigger_events(pg_temp.acct()), 1, 'expire descarta 1 evento vencido');
 select is((select status from automation_trigger_events where account_id = pg_temp.acct()
-            and created_at < now() - interval '10 minutes'), 'expired', 'o vencido fica expired');
+            and created_at < now() - interval '60 minutes'), 'expired', 'o vencido fica expired');
 select is((select status from automation_trigger_events where account_id = pg_temp.acct()
-            and created_at between now() - interval '10 minutes' and now() - interval '8 minutes'), 'pending',
-  'o de 9 minutos continua pendente');
+            and created_at between now() - interval '60 minutes' and now() - interval '58 minutes'), 'pending',
+  'o de 59 minutos continua pendente');
+
+-- o descarte aparece nos logs da automação que teria disparado
+select results_eq(
+  $$ select status, error_message, contact_id, trigger_event from automation_logs
+      where automation_id = '00000000-0000-0000-0000-00000000e7f1' and status = 'skipped' $$,
+  $$ values ('skipped'::text, 'evento vencido'::text, '00000000-0000-0000-0000-00000000e7c1'::uuid, 'conversation_assigned'::text) $$,
+  'descarte registrado em automation_logs (skipped, "evento vencido")');
+select is((select count(*) from automation_logs
+            where automation_id in ('00000000-0000-0000-0000-00000000e7f2', '00000000-0000-0000-0000-00000000e7f3')), 0::bigint,
+  'sem log para automação de outro atendente nem para a ligada depois do evento');
+select is((select execution_count from automations where id = '00000000-0000-0000-0000-00000000e7f1'), 0,
+  'descarte não conta como execução');
 
 set local role authenticated;
 select throws_ok($$ select expire_stale_automation_trigger_events(null) $$, '42501', null,

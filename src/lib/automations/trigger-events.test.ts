@@ -56,7 +56,7 @@ function seed(autos: Record<string, unknown>[], steps: Record<string, unknown>[]
           });
           return 1;
         },
-        // Migration 061: eventos pendentes há mais de 10 min viram "expired".
+        // Migration 061: eventos pendentes há mais de 60 min viram "expired".
         expire_stale_automation_trigger_events: (a) => {
           const cutoff = new Date(Date.now() - EVENT_TTL_MS).toISOString();
           const stale = db.tables.automation_trigger_events.filter(
@@ -79,7 +79,7 @@ function seed(autos: Record<string, unknown>[], steps: Record<string, unknown>[]
   h.db = db;
 }
 
-const EVENT_TTL_MS = 10 * 60_000;
+const EVENT_TTL_MS = 60 * 60_000;
 // activated_at (061): quando a automação foi ligada. Padrão bem antigo,
 // para os testes que não tratam disso.
 const auto = (
@@ -178,7 +178,7 @@ describe("061: eventos da fila só para automações já ativas, e eventos venci
 
   it("300 atribuições sem automação ativa, depois ativar uma 'conversa atribuída' → 0 execuções; 1 atribuição nova → 1", async () => {
     seed([], []);
-    const t0 = Date.now() - 60_000; // há 1 minuto (dentro dos 10 min)
+    const t0 = Date.now() - 60_000; // há 1 minuto (dentro dos 60 min)
     for (let i = 0; i < 300; i++) assignEvent(new Date(t0 + i).toISOString());
     // a automação é ligada agora, depois dos 300 eventos
     db.tables.automations.push(auto("onAssign", "conversation_assigned", {}, "1", new Date().toISOString()));
@@ -194,14 +194,21 @@ describe("061: eventos da fila só para automações já ativas, e eventos venci
     expect(ran()).toEqual(["onAssign"]);
   });
 
-  it("evento pendente há mais de 10 minutos é descartado com log, mesmo com automação ativa antes", async () => {
+  it("evento pendente há mais de 60 minutos é descartado com log, mesmo com automação ativa antes", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     seed([auto("onAssign", "conversation_assigned", {}, "1")], [step("onAssign", "send_message", { text: "atribuída" })]);
-    assignEvent(new Date(Date.now() - 11 * 60_000).toISOString());
+    assignEvent(new Date(Date.now() - 61 * 60_000).toISOString());
     await drainAutomationTriggerEvents(ACC);
     expect(ran()).toEqual([]);
     expect(db.tables.automation_trigger_events[0].status).toBe("expired");
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("descartado"), expect.anything());
     warn.mockRestore();
+  });
+
+  it("evento de 59 minutos ainda dispara (prazo é 60)", async () => {
+    seed([auto("onAssign", "conversation_assigned", {}, "1")], [step("onAssign", "send_message", { text: "atribuída" })]);
+    assignEvent(new Date(Date.now() - 59 * 60_000).toISOString());
+    await drainAutomationTriggerEvents(ACC);
+    expect(ran()).toEqual(["onAssign"]);
   });
 });
